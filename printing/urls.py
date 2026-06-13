@@ -24,4 +24,7 @@ urlpatterns = [
     path("api/admin/print-jobs/", views.api_admin_print_jobs, name="api_admin_print_jobs"),
     path("api/admin/printers/", views.api_admin_printers, name="api_admin_printers"),
     path("api/admin/audit-logs/", views.api_admin_audit_logs, name="api_admin_audit_logs"),
+    path("api/requests/create/", views.api_create_print_request, name="api_create_print_request"),
+    path("api/requests/<int:request_id>/payment/confirm/", views.api_confirm_payment, name="api_confirm_payment"),
+    path("api/requests/<int:request_id>/payment/reject/", views.api_reject_payment, name="api_reject_payment"),
 ]

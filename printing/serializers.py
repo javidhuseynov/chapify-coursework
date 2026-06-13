@@ -106,3 +106,25 @@ class AuditLogSerializer(serializers.ModelSerializer):
             "event_timestamp",
             "description",
         ]
+
+class CreatePrintRequestSerializer(serializers.Serializer):
+    file = serializers.FileField()
+    document_pages = serializers.IntegerField(min_value=1)
+    copies = serializers.IntegerField(min_value=1)
+    color_mode = serializers.ChoiceField(choices=PrintSettings.COLOR_CHOICES)
+    paper_format = serializers.ChoiceField(choices=PrintSettings.PAPER_CHOICES)
+    duplex_mode = serializers.ChoiceField(choices=PrintSettings.DUPLEX_CHOICES)
+
+    def validate_file(self, uploaded_file):
+        allowed_extensions = [".pdf", ".docx", ".txt"]
+        file_name = uploaded_file.name.lower()
+
+        if not any(file_name.endswith(ext) for ext in allowed_extensions):
+            raise serializers.ValidationError("Only PDF, DOCX, and TXT files are allowed.")
+
+        max_size = 5 * 1024 * 1024
+
+        if uploaded_file.size > max_size:
+            raise serializers.ValidationError("File size must not exceed 5 MB.")
+
+        return uploaded_file

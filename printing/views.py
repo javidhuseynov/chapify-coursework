@@ -1,11 +1,13 @@
 import os
 
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from .serializers import (
     AuditLogSerializer,
+    CreatePrintRequestSerializer,
     PaymentTransactionSerializer,
     PrintJobSerializer,
     PrintRequestSerializer,
@@ -383,3 +385,178 @@ def api_admin_audit_logs(request):
     logs = AuditLog.objects.all().order_by("-event_timestamp")[:100]
     serializer = AuditLogSerializer(logs, many=True)
     return Response(serializer.data)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def api_create_print_request(request):
+    serializer = CreatePrintRequestSerializer(data=request.data)
+
+    if serializer.is_valid():
+        uploaded_file = serializer.validated_data["file"]
+        extension = os.path.splitext(uploaded_file.name)[1].lower().replace(".", "")
+
+        document = Document.objects.create(
+            user=request.user,
+            file=uploaded_file,
+            file_name=uploaded_file.name,
+            file_type=extension,
+            file_size=uploaded_file.size,
+            validation_status=Document.STATUS_VALID,
+            temporary_storage_path=f"documents/{uploaded_file.name}",
+        )
+
+        settings = PrintSettings.objects.create(
+            copies=serializer.validated_data["copies"],
+            color_mode=serializer.validated_data["color_mode"],
+            paper_format=serializer.validated_data["paper_format"],
+            duplex_mode=serializer.validated_data["duplex_mode"],
+        )
+
+        print_request = PrintRequest.objects.create(
+            user=request.user,
+            document=document,
+            settings=settings,
+            document_pages=serializer.validated_data["document_pages"],
+            status=PrintRequest.STATUS_PRICE_CALCULATED,
+        )
+
+        print_request.calculate_price()
+        print_request.status = PrintRequest.STATUS_AWAITING_PAYMENT
+        print_request.save()
+
+        AuditLog.objects.create(
+            user=request.user,
+            print_request=print_request,
+            event_type=AuditLog.EVENT_DOCUMENT_UPLOADED,
+            description=f"API document uploaded: {document.file_name}",
+        )
+
+        AuditLog.objects.create(
+            user=request.user,
+            print_request=print_request,
+            event_type=AuditLog.EVENT_DOCUMENT_VALIDATED,
+            description=f"API document validated successfully: {document.file_name}",
+        )
+
+        response_serializer = PrintRequestSerializer(print_request)
+
+        return Response(
+            {
+                "message": "Print request created successfully.",
+                "print_request": response_serializer.data,
+            },
+            status=201,
+        )
+
+    return Response(serializer.errors, status=400)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def api_confirm_payment(request, request_id):
+    print_request = PrintRequest.objects.get(id=request_id, user=request.user)
+
+    existing_payment = PaymentTransaction.objects.filter(print_request=print_request).first()
+
+    if existing_payment:
+        return Response(
+            {
+                "message": "Payment was already processed for this request.",
+                "payment_status": existing_payment.payment_status,
+            },
+            status=400,
+        )
+
+    payment_transaction = PaymentTransaction.objects.create(
+        print_request=print_request,
+        amount=print_request.total_price,
+        payment_status=PaymentTransaction.STATUS_CONFIRMED,
+        gateway_reference=f"API-SIM-{print_request.id:05d}",
+    )
+
+    print_request.status = PrintRequest.STATUS_PAYMENT_CONFIRMED
+    print_request.save()
+
+    printer = Printer.objects.filter(printer_status=Printer.STATUS_AVAILABLE).first()
+
+    if printer is None:
+        printer = Printer.objects.create(
+            printer_name="Default Printer",
+            location="Library / Study Center",
+            printer_status=Printer.STATUS_AVAILABLE,
+        )
+
+    print_job = PrintJob.objects.create(
+        print_request=print_request,
+        printer=printer,
+        job_status=PrintJob.STATUS_COMPLETED,
+        completed_at=timezone.now(),
+    )
+
+    AuditLog.objects.create(
+        user=request.user,
+        print_request=print_request,
+        event_type=AuditLog.EVENT_PAYMENT_CONFIRMED,
+        description=f"API payment confirmed. Transaction reference: {payment_transaction.gateway_reference}",
+    )
+
+    AuditLog.objects.create(
+        user=request.user,
+        print_request=print_request,
+        event_type=AuditLog.EVENT_PRINT_JOB_CREATED,
+        description=f"API print job created for request #{print_request.id}.",
+    )
+
+    return Response(
+        {
+            "message": "Payment confirmed and print job created.",
+            "payment_id": payment_transaction.id,
+            "payment_status": payment_transaction.payment_status,
+            "print_job_id": print_job.id,
+            "print_job_status": print_job.job_status,
+        },
+        status=201,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def api_reject_payment(request, request_id):
+    print_request = PrintRequest.objects.get(id=request_id, user=request.user)
+
+    existing_payment = PaymentTransaction.objects.filter(print_request=print_request).first()
+
+    if existing_payment:
+        return Response(
+            {
+                "message": "Payment was already processed for this request.",
+                "payment_status": existing_payment.payment_status,
+            },
+            status=400,
+        )
+
+    payment_transaction = PaymentTransaction.objects.create(
+        print_request=print_request,
+        amount=print_request.total_price,
+        payment_status=PaymentTransaction.STATUS_REJECTED,
+        gateway_reference=f"API-SIM-REJECT-{print_request.id:05d}",
+    )
+
+    print_request.status = PrintRequest.STATUS_PAYMENT_REJECTED
+    print_request.save()
+
+    AuditLog.objects.create(
+        user=request.user,
+        print_request=print_request,
+        event_type=AuditLog.EVENT_PAYMENT_REJECTED,
+        description=f"API payment rejected for request #{print_request.id}.",
+    )
+
+    return Response(
+        {
+            "message": "Payment rejected.",
+            "payment_id": payment_transaction.id,
+            "payment_status": payment_transaction.payment_status,
+        },
+        status=201,
+    )
