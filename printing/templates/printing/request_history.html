@@ -3,45 +3,79 @@
 {% block title %}Print History - Chapify{% endblock %}
 
 {% block content %}
-<div class="card shadow-sm">
-    <div class="card-body">
-        <h2 class="mb-3">My print history</h2>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1">My Print History</h2>
+        <p class="text-muted mb-0">
+            View submitted print requests, payment status, price, and request details.
+        </p>
+    </div>
 
-        {% if print_requests %}
-            <table class="table table-bordered table-hover">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Request ID</th>
-                        <th>Document</th>
-                        <th>Status</th>
-                        <th>Total price</th>
-                        <th>Created at</th>
-                        <th>Details</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for request_item in print_requests %}
-                    <tr>
-                        <td>#{{ request_item.id }}</td>
-                        <td>{{ request_item.document.file_name }}</td>
-                        <td>{{ request_item.get_status_display }}</td>
-                        <td>{{ request_item.total_price }} EUR</td>
-                        <td>{{ request_item.created_at }}</td>
-                        <td>
-                            <a href="{% url 'request_status' request_item.id %}" class="btn btn-sm btn-outline-dark">
-                                View
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <p class="text-muted">No print requests have been created yet.</p>
-        {% endif %}
-
+    <div>
         <a href="{% url 'upload_document' %}" class="btn btn-dark">Create new request</a>
         <a href="/" class="btn btn-outline-secondary">Back to home</a>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-dark text-white">
+        <h5 class="mb-0">Submitted Print Requests</h5>
+    </div>
+
+    <div class="card-body">
+        {% if print_requests %}
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Request ID</th>
+                            <th>Document</th>
+                            <th>Status</th>
+                            <th>Total price</th>
+                            <th>Created at</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for request_item in print_requests %}
+                        <tr>
+                            <td>#{{ request_item.id }}</td>
+                            <td>{{ request_item.document.file_name }}</td>
+                            <td>
+                                {% if request_item.status == "PAYMENT_CONFIRMED" or request_item.status == "COMPLETED" %}
+                                    <span class="badge bg-success">{{ request_item.get_status_display }}</span>
+                                {% elif request_item.status == "PAYMENT_REJECTED" or request_item.status == "FAILED" %}
+                                    <span class="badge bg-danger">{{ request_item.get_status_display }}</span>
+                                {% elif request_item.status == "AWAITING_PAYMENT" %}
+                                    <span class="badge bg-warning text-dark">{{ request_item.get_status_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ request_item.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ request_item.total_price }} EUR</td>
+                            <td>{{ request_item.created_at }}</td>
+                            <td>
+                                <a href="{% url 'request_status' request_item.id %}" class="btn btn-sm btn-outline-dark">
+                                    View details
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-4">
+                <h5>No print requests yet</h5>
+                <p class="text-muted">
+                    You have not created any print requests yet. Start by uploading a document.
+                </p>
+                <a href="{% url 'upload_document' %}" class="btn btn-dark">
+                    Create first request
+                </a>
+            </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
