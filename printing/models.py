@@ -2,7 +2,6 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-
 class Profile(models.Model):
     ROLE_USER = "USER"
     ROLE_ADMIN = "ADMIN"
@@ -217,6 +216,7 @@ class AuditLog(models.Model):
     EVENT_LOGIN_FAILED = "LOGIN_FAILED"
     EVENT_DOCUMENT_UPLOADED = "DOCUMENT_UPLOADED"
     EVENT_DOCUMENT_VALIDATED = "DOCUMENT_VALIDATED"
+    EVENT_PRINT_REQUEST_CREATED = "PRINT_REQUEST_CREATED"
     EVENT_PAYMENT_CONFIRMED = "PAYMENT_CONFIRMED"
     EVENT_PAYMENT_REJECTED = "PAYMENT_REJECTED"
     EVENT_PRINT_JOB_CREATED = "PRINT_JOB_CREATED"
@@ -229,6 +229,7 @@ class AuditLog(models.Model):
         (EVENT_LOGIN_FAILED, "Login failed"),
         (EVENT_DOCUMENT_UPLOADED, "Document uploaded"),
         (EVENT_DOCUMENT_VALIDATED, "Document validated"),
+        (EVENT_PRINT_REQUEST_CREATED, "Print request created"),
         (EVENT_PAYMENT_CONFIRMED, "Payment confirmed"),
         (EVENT_PAYMENT_REJECTED, "Payment rejected"),
         (EVENT_PRINT_JOB_CREATED, "Print job created"),
@@ -237,8 +238,18 @@ class AuditLog(models.Model):
         (EVENT_ADMIN_ACTION, "Admin action"),
     ]
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-    print_request = models.ForeignKey(PrintRequest, on_delete=models.SET_NULL, null=True, blank=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    print_request = models.ForeignKey(
+        PrintRequest,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
     event_type = models.CharField(max_length=40, choices=EVENT_CHOICES)
     event_timestamp = models.DateTimeField(default=timezone.now)
     description = models.TextField()

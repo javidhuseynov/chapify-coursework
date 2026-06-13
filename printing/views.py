@@ -124,6 +124,17 @@ def print_settings(request, document_id):
             print_request.calculate_price()
             print_request.status = PrintRequest.STATUS_AWAITING_PAYMENT
             print_request.save()
+            AuditLog.objects.create(
+                user=request.user,
+                print_request=print_request,
+                event_type=AuditLog.EVENT_PRINT_REQUEST_CREATED,
+                description=(
+                    f"Print request #{print_request.id} created. "
+                    f"Pages: {print_request.document_pages}, "
+                    f"copies: {settings.copies}, "
+                    f"total price: {print_request.total_price}."
+                ),
+            )
 
             return redirect("payment", request_id=print_request.id)
     else:
@@ -424,6 +435,17 @@ def api_create_print_request(request):
         print_request.calculate_price()
         print_request.status = PrintRequest.STATUS_AWAITING_PAYMENT
         print_request.save()
+        AuditLog.objects.create(
+            user=request.user,
+            print_request=print_request,
+            event_type=AuditLog.EVENT_PRINT_REQUEST_CREATED,
+            description=(
+                f"API print request #{print_request.id} created. "
+                f"Pages: {print_request.document_pages}, "
+                f"copies: {settings.copies}, "
+                f"total price: {print_request.total_price}."
+            ),
+        )
 
         AuditLog.objects.create(
             user=request.user,
