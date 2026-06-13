@@ -132,7 +132,7 @@ def print_settings(request, document_id):
                     f"Print request #{print_request.id} created. "
                     f"Pages: {print_request.document_pages}, "
                     f"copies: {settings.copies}, "
-                    f"total price: {print_request.total_price}."
+                    f"total price: {print_request.total_price:.2f} EUR."
                 ),
             )
 
@@ -443,7 +443,7 @@ def api_create_print_request(request):
                 f"API print request #{print_request.id} created. "
                 f"Pages: {print_request.document_pages}, "
                 f"copies: {settings.copies}, "
-                f"total price: {print_request.total_price}."
+                f"total price: {float(print_request.total_price):.2f} EUR."
             ),
         )
 
