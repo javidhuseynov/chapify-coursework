@@ -1,5 +1,17 @@
 import os
 
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.response import Response
+
+from .serializers import (
+    AuditLogSerializer,
+    PaymentTransactionSerializer,
+    PrintJobSerializer,
+    PrintRequestSerializer,
+    PrinterSerializer,
+)
+
 from django.contrib.auth import login
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.auth.decorators import login_required
@@ -272,3 +284,102 @@ def admin_dashboard(request):
             "recent_logs": recent_logs,
         },
     )
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def api_my_requests(request):
+    print_requests = PrintRequest.objects.filter(user=request.user).order_by("-created_at")
+    serializer = PrintRequestSerializer(print_requests, many=True)
+    return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def api_request_detail(request, request_id):
+    print_request = PrintRequest.objects.get(id=request_id, user=request.user)
+    serializer = PrintRequestSerializer(print_request)
+    return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def api_my_payments(request):
+    payments = PaymentTransaction.objects.filter(
+        print_request__user=request.user
+    ).order_by("-payment_date")
+
+    serializer = PaymentTransactionSerializer(payments, many=True)
+    return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def api_my_print_jobs(request):
+    jobs = PrintJob.objects.filter(
+        print_request__user=request.user
+    ).order_by("-created_at")
+
+    serializer = PrintJobSerializer(jobs, many=True)
+    return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def api_admin_summary(request):
+    data = {
+        "total_requests": PrintRequest.objects.count(),
+        "confirmed_payments": PaymentTransaction.objects.filter(
+            payment_status=PaymentTransaction.STATUS_CONFIRMED
+        ).count(),
+        "rejected_payments": PaymentTransaction.objects.filter(
+            payment_status=PaymentTransaction.STATUS_REJECTED
+        ).count(),
+        "completed_jobs": PrintJob.objects.filter(
+            job_status=PrintJob.STATUS_COMPLETED
+        ).count(),
+        "failed_jobs": PrintJob.objects.filter(
+            job_status=PrintJob.STATUS_FAILED
+        ).count(),
+    }
+
+    return Response(data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def api_admin_requests(request):
+    print_requests = PrintRequest.objects.all().order_by("-created_at")
+    serializer = PrintRequestSerializer(print_requests, many=True)
+    return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def api_admin_transactions(request):
+    payments = PaymentTransaction.objects.all().order_by("-payment_date")
+    serializer = PaymentTransactionSerializer(payments, many=True)
+    return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def api_admin_print_jobs(request):
+    jobs = PrintJob.objects.all().order_by("-created_at")
+    serializer = PrintJobSerializer(jobs, many=True)
+    return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def api_admin_printers(request):
+    printers = Printer.objects.all().order_by("printer_name")
+    serializer = PrinterSerializer(printers, many=True)
+    return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def api_admin_audit_logs(request):
+    logs = AuditLog.objects.all().order_by("-event_timestamp")[:100]
+    serializer = AuditLogSerializer(logs, many=True)
+    return Response(serializer.data)
