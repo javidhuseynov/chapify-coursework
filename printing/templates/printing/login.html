@@ -1,0 +1,38 @@
+{% extends "printing/base.html" %}
+
+{% block title %}Login - Chapify{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="mb-3">Login</h2>
+
+                {% if form.errors %}
+                    <div class="alert alert-danger">
+                        Invalid username or password.
+                    </div>
+                {% endif %}
+
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        {{ form.username.label_tag }}
+                        {{ form.username }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.password.label_tag }}
+                        {{ form.password }}
+                    </div>
+
+                    <button type="submit" class="btn btn-dark">Login</button>
+                    <a href="{% url 'register' %}" class="btn btn-outline-secondary">Create account</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

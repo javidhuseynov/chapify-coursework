@@ -1,0 +1,46 @@
+{% extends "printing/base.html" %}
+
+{% block title %}Print Settings - Chapify{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-body">
+        <h2 class="mb-3">Print settings</h2>
+
+        <p class="text-muted">
+            Document: <strong>{{ document.file_name }}</strong>
+        </p>
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="mb-3">
+                {{ form.document_pages.label_tag }}
+                {{ form.document_pages }}
+            </div>
+
+            <div class="mb-3">
+                {{ form.copies.label_tag }}
+                {{ form.copies }}
+            </div>
+
+            <div class="mb-3">
+                {{ form.color_mode.label_tag }}
+                {{ form.color_mode }}
+            </div>
+
+            <div class="mb-3">
+                {{ form.paper_format.label_tag }}
+                {{ form.paper_format }}
+            </div>
+
+            <div class="mb-3">
+                {{ form.duplex_mode.label_tag }}
+                {{ form.duplex_mode }}
+            </div>
+
+            <button type="submit" class="btn btn-dark">Calculate price and continue</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

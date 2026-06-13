@@ -1,0 +1,46 @@
+{% extends "printing/base.html" %}
+
+{% block title %}Register - Chapify{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="mb-3">Create account</h2>
+
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        {{ form.username.label_tag }}
+                        {{ form.username }}
+                        <div class="text-danger">{{ form.username.errors }}</div>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.email.label_tag }}
+                        {{ form.email }}
+                        <div class="text-danger">{{ form.email.errors }}</div>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.password1.label_tag }}
+                        {{ form.password1 }}
+                        <div class="text-danger">{{ form.password1.errors }}</div>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.password2.label_tag }}
+                        {{ form.password2 }}
+                        <div class="text-danger">{{ form.password2.errors }}</div>
+                    </div>
+
+                    <button type="submit" class="btn btn-dark">Register</button>
+                    <a href="{% url 'login' %}" class="btn btn-outline-secondary">Already have an account?</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "printing/base.html" %}
+
+{% block title %}Request Status - Chapify{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-body">
+        <h2 class="mb-3">Print request status</h2>
+
+        <table class="table table-bordered">
+            <tr>
+                <th>Request ID</th>
+                <td>#{{ print_request.id }}</td>
+            </tr>
+            <tr>
+                <th>Document</th>
+                <td>{{ print_request.document.file_name }}</td>
+            </tr>
+            <tr>
+                <th>Total price</th>
+                <td>{{ print_request.total_price }} EUR</td>
+            </tr>
+            <tr>
+                <th>Request status</th>
+                <td>{{ print_request.get_status_display }}</td>
+            </tr>
+
+            {% if payment_transaction %}
+            <tr>
+                <th>Payment status</th>
+                <td>{{ payment_transaction.get_payment_status_display }}</td>
+            </tr>
+            <tr>
+                <th>Gateway reference</th>
+                <td>{{ payment_transaction.gateway_reference }}</td>
+            </tr>
+            {% endif %}
+
+            {% if print_job %}
+            <tr>
+                <th>Print job status</th>
+                <td>{{ print_job.get_job_status_display }}</td>
+            </tr>
+            <tr>
+                <th>Printer</th>
+                <td>{{ print_job.printer }}</td>
+            </tr>
+            {% endif %}
+        </table>
+
+        <a href="{% url 'request_history' %}" class="btn btn-dark">Open my history</a>
+        <a href="/" class="btn btn-outline-secondary">Back to home</a>
+        <a href="/admin/" class="btn btn-outline-secondary">Open Admin Panel</a>
+    </div>
+</div>
+{% endblock %}

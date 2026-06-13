@@ -1,0 +1,40 @@
+{% extends "printing/base.html" %}
+
+{% block title %}Chapify - Home{% endblock %}
+
+{% block content %}
+<div class="row align-items-center">
+    <div class="col-md-8">
+        <h1 class="display-5 fw-bold">Chapify</h1>
+        <p class="lead">
+            Self-service printing information system with integrated micropayment functionality.
+        </p>
+
+        <p>
+            Chapify allows users to upload documents, select print settings,
+            calculate the price, simulate payment, and track print request status.
+        </p>
+
+        <div class="mt-4">
+            <a href="/admin/" class="btn btn-dark">Open Admin Panel</a>
+            <a href="{% url 'upload_document' %}" class="btn btn-outline-secondary">Start Print Request</a>
+        </div>
+    </div>
+
+    <div class="col-md-4 mt-4 mt-md-0">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Prototype functions</h5>
+                <ul class="mb-0">
+                    <li>User authentication</li>
+                    <li>Document upload</li>
+                    <li>Price calculation</li>
+                    <li>Payment simulation</li>
+                    <li>Print job tracking</li>
+                    <li>Admin monitoring</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

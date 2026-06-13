@@ -1,0 +1,61 @@
+{% extends "printing/base.html" %}
+
+{% block title %}Payment Simulation - Chapify{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-body">
+        <h2 class="mb-3">Payment simulation</h2>
+
+        <p class="text-muted">
+            This prototype does not process real card data. The payment gateway is simulated.
+        </p>
+
+        <table class="table table-bordered">
+            <tr>
+                <th>Request ID</th>
+                <td>#{{ print_request.id }}</td>
+            </tr>
+            <tr>
+                <th>Document</th>
+                <td>{{ print_request.document.file_name }}</td>
+            </tr>
+            <tr>
+                <th>Pages</th>
+                <td>{{ print_request.document_pages }}</td>
+            </tr>
+            <tr>
+                <th>Copies</th>
+                <td>{{ print_request.settings.copies }}</td>
+            </tr>
+            <tr>
+                <th>Color mode</th>
+                <td>{{ print_request.settings.get_color_mode_display }}</td>
+            </tr>
+            <tr>
+                <th>Paper format</th>
+                <td>{{ print_request.settings.paper_format }}</td>
+            </tr>
+            <tr>
+                <th>Duplex mode</th>
+                <td>{{ print_request.settings.get_duplex_mode_display }}</td>
+            </tr>
+            <tr>
+                <th>Total price</th>
+                <td><strong>{{ print_request.total_price }} EUR</strong></td>
+            </tr>
+        </table>
+
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" name="action" value="confirm" class="btn btn-success">
+                Simulate successful payment
+            </button>
+
+            <button type="submit" name="action" value="reject" class="btn btn-danger">
+                Simulate rejected payment
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
