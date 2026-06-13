@@ -12,6 +12,8 @@ local_settings.py
 # Virtual environment
 venv/
 .env
+.env.*
+!.env.example
 
 # SQLite database
 db.sqlite3
@@ -19,6 +21,9 @@ db.sqlite3
 # Uploaded files
 media/
 documents/
+
+# Static files collected for production
+staticfiles/
 
 # IDE/editor
 .vscode/
@@ -28,4 +33,16 @@ documents/
 .DS_Store
 Thumbs.db
 
+# Test files
 test.txt
+
+# Coverage / testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Backup / temporary files
+*.bak
+*.tmp
+*.swp
+*.ps1~
