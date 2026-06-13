@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from .validators import validate_uploaded_document
 
 from .models import (
     AuditLog,
@@ -116,15 +117,9 @@ class CreatePrintRequestSerializer(serializers.Serializer):
     duplex_mode = serializers.ChoiceField(choices=PrintSettings.DUPLEX_CHOICES)
 
     def validate_file(self, uploaded_file):
-        allowed_extensions = [".pdf", ".docx", ".txt"]
-        file_name = uploaded_file.name.lower()
+        error_message = validate_uploaded_document(uploaded_file)
 
-        if not any(file_name.endswith(ext) for ext in allowed_extensions):
-            raise serializers.ValidationError("Only PDF, DOCX, and TXT files are allowed.")
-
-        max_size = 5 * 1024 * 1024
-
-        if uploaded_file.size > max_size:
-            raise serializers.ValidationError("File size must not exceed 5 MB.")
+        if error_message:
+            raise serializers.ValidationError(error_message)
 
         return uploaded_file
