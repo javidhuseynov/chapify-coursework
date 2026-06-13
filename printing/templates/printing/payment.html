@@ -3,59 +3,121 @@
 {% block title %}Payment Simulation - Chapify{% endblock %}
 
 {% block content %}
-<div class="card shadow-sm">
-    <div class="card-body">
-        <h2 class="mb-3">Payment simulation</h2>
-
-        <p class="text-muted">
-            This prototype does not process real card data. The payment gateway is simulated.
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1">Payment Simulation</h2>
+        <p class="text-muted mb-0">
+            Review the calculated print request price and simulate payment confirmation or rejection.
         </p>
+    </div>
 
-        <table class="table table-bordered">
-            <tr>
-                <th>Request ID</th>
-                <td>#{{ print_request.id }}</td>
-            </tr>
-            <tr>
-                <th>Document</th>
-                <td>{{ print_request.document.file_name }}</td>
-            </tr>
-            <tr>
-                <th>Pages</th>
-                <td>{{ print_request.document_pages }}</td>
-            </tr>
-            <tr>
-                <th>Copies</th>
-                <td>{{ print_request.settings.copies }}</td>
-            </tr>
-            <tr>
-                <th>Color mode</th>
-                <td>{{ print_request.settings.get_color_mode_display }}</td>
-            </tr>
-            <tr>
-                <th>Paper format</th>
-                <td>{{ print_request.settings.paper_format }}</td>
-            </tr>
-            <tr>
-                <th>Duplex mode</th>
-                <td>{{ print_request.settings.get_duplex_mode_display }}</td>
-            </tr>
-            <tr>
-                <th>Total price</th>
-                <td><strong>{{ print_request.total_price }} EUR</strong></td>
-            </tr>
-        </table>
+    <div>
+        <a href="{% url 'request_history' %}" class="btn btn-outline-secondary">Open my history</a>
+    </div>
+</div>
 
-        <form method="post">
-            {% csrf_token %}
-            <button type="submit" name="action" value="confirm" class="btn btn-success">
-                Simulate successful payment
-            </button>
+<div class="row">
+    <div class="col-md-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Payment Summary</h5>
+            </div>
 
-            <button type="submit" name="action" value="reject" class="btn btn-danger">
-                Simulate rejected payment
-            </button>
-        </form>
+            <div class="card-body">
+                <div class="alert alert-warning border">
+                    This prototype does not process real card data. The external payment gateway is simulated for coursework demonstration purposes.
+                </div>
+
+                <table class="table table-bordered mb-4">
+                    <tr>
+                        <th style="width: 35%;">Request ID</th>
+                        <td>#{{ print_request.id }}</td>
+                    </tr>
+                    <tr>
+                        <th>Document</th>
+                        <td>{{ print_request.document.file_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Pages</th>
+                        <td>{{ print_request.document_pages }}</td>
+                    </tr>
+                    <tr>
+                        <th>Copies</th>
+                        <td>{{ print_request.settings.copies }}</td>
+                    </tr>
+                    <tr>
+                        <th>Color mode</th>
+                        <td>{{ print_request.settings.get_color_mode_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>Paper format</th>
+                        <td>{{ print_request.settings.paper_format }}</td>
+                    </tr>
+                    <tr>
+                        <th>Duplex mode</th>
+                        <td>{{ print_request.settings.get_duplex_mode_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>Total price</th>
+                        <td>
+                            <strong>{{ print_request.total_price }} EUR</strong>
+                        </td>
+                    </tr>
+                </table>
+
+                <form method="post">
+                    {% csrf_token %}
+
+                    <button type="submit" name="action" value="confirm" class="btn btn-success">
+                        Simulate successful payment
+                    </button>
+
+                    <button type="submit" name="action" value="reject" class="btn btn-danger">
+                        Simulate rejected payment
+                    </button>
+
+                    <a href="{% url 'request_history' %}" class="btn btn-outline-secondary">
+                        Cancel
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Workflow Step 3 of 3</h5>
+            </div>
+
+            <div class="card-body">
+                <p class="mb-2">
+                    <strong>1. Upload document</strong>
+                </p>
+                <p class="text-muted">
+                    The document was uploaded and validated.
+                </p>
+
+                <p class="mb-2">
+                    <strong>2. Select print settings</strong>
+                </p>
+                <p class="text-muted">
+                    The total price was calculated automatically.
+                </p>
+
+                <p class="mb-2">
+                    <strong>3. Confirm payment</strong>
+                </p>
+                <p class="text-muted">
+                    If payment is confirmed, the system creates a print job.
+                </p>
+
+                <div class="alert alert-light border mb-0">
+                    <strong>Security note:</strong><br>
+                    Chapify does not store card details. In a real deployment, payment would be handled by an external payment gateway.
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
