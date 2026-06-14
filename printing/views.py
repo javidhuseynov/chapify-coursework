@@ -18,7 +18,7 @@ from django.contrib.auth import login
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .forms import DocumentUploadForm, PrintSettingsForm, RegisterForm
@@ -32,6 +32,20 @@ from .models import (
     PrintSettings,
 )
 
+def get_user_print_request_or_404(request, request_id):
+    return get_object_or_404(
+        PrintRequest,
+        id=request_id,
+        user=request.user,
+    )
+
+
+def get_user_document_or_404(request, document_id):
+    return get_object_or_404(
+        Document,
+        id=document_id,
+        user=request.user,
+    )
 
 def home(request):
     return render(request, "printing/home.html")
@@ -104,7 +118,7 @@ def upload_document(request):
 
 @login_required
 def print_settings(request, document_id):
-    document = Document.objects.get(id=document_id, user=request.user)
+    document = get_user_document_or_404(request, document_id)
 
     if request.method == "POST":
         form = PrintSettingsForm(request.POST)
@@ -152,7 +166,7 @@ def print_settings(request, document_id):
 
 @login_required
 def payment(request, request_id):
-    print_request = PrintRequest.objects.get(id=request_id, user=request.user)
+    print_request = get_user_print_request_or_404(request, request_id)
     existing_payment = PaymentTransaction.objects.filter(print_request=print_request).first()
 
     if existing_payment:
@@ -260,7 +274,7 @@ def payment(request, request_id):
 
 @login_required
 def request_status(request, request_id):
-    print_request = PrintRequest.objects.get(id=request_id, user=request.user)
+    print_request = get_user_print_request_or_404(request, request_id)
     payment_transaction = PaymentTransaction.objects.filter(print_request=print_request).first()
     print_job = PrintJob.objects.filter(print_request=print_request).first()
 
@@ -334,7 +348,7 @@ def api_my_requests(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def api_request_detail(request, request_id):
-    print_request = PrintRequest.objects.get(id=request_id, user=request.user)
+    print_request = get_user_print_request_or_404(request, request_id)
     serializer = PrintRequestSerializer(print_request)
     return Response(serializer.data)
 
@@ -501,7 +515,7 @@ def api_create_print_request(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def api_confirm_payment(request, request_id):
-    print_request = PrintRequest.objects.get(id=request_id, user=request.user)
+    print_request = get_user_print_request_or_404(request, request_id)
 
     existing_payment = PaymentTransaction.objects.filter(print_request=print_request).first()
 
@@ -582,7 +596,7 @@ def api_confirm_payment(request, request_id):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def api_reject_payment(request, request_id):
-    print_request = PrintRequest.objects.get(id=request_id, user=request.user)
+    print_request = get_user_print_request_or_404(request, request_id)
 
     existing_payment = PaymentTransaction.objects.filter(print_request=print_request).first()
 
