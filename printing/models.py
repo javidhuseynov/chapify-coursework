@@ -24,7 +24,7 @@ class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default=ROLE_USER)
     account_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
-
+    
     def __str__(self):
         return f"{self.user.username} ({self.role})"
 
@@ -52,6 +52,15 @@ class Document(models.Model):
         default=STATUS_PENDING
     )
     temporary_storage_path = models.CharField(max_length=500, blank=True)
+
+    def delete_file_from_storage(self):
+        if self.file and self.file.storage.exists(self.file.name):
+            self.file.delete(save=False)
+            self.temporary_storage_path = ""
+            self.save(update_fields=["temporary_storage_path"])
+            return True
+
+        return False
 
     def __str__(self):
         return self.file_name
@@ -216,6 +225,7 @@ class AuditLog(models.Model):
     EVENT_LOGIN_FAILED = "LOGIN_FAILED"
     EVENT_DOCUMENT_UPLOADED = "DOCUMENT_UPLOADED"
     EVENT_DOCUMENT_VALIDATED = "DOCUMENT_VALIDATED"
+    EVENT_DOCUMENT_DELETED = "DOCUMENT_DELETED"
     EVENT_PRINT_REQUEST_CREATED = "PRINT_REQUEST_CREATED"
     EVENT_PAYMENT_CONFIRMED = "PAYMENT_CONFIRMED"
     EVENT_PAYMENT_REJECTED = "PAYMENT_REJECTED"
@@ -229,6 +239,7 @@ class AuditLog(models.Model):
         (EVENT_LOGIN_FAILED, "Login failed"),
         (EVENT_DOCUMENT_UPLOADED, "Document uploaded"),
         (EVENT_DOCUMENT_VALIDATED, "Document validated"),
+        (EVENT_DOCUMENT_DELETED, "Document deleted from storage"),
         (EVENT_PRINT_REQUEST_CREATED, "Print request created"),
         (EVENT_PAYMENT_CONFIRMED, "Payment confirmed"),
         (EVENT_PAYMENT_REJECTED, "Payment rejected"),

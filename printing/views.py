@@ -181,12 +181,12 @@ def payment(request, request_id):
                     printer_status=Printer.STATUS_AVAILABLE,
                 )
 
-            PrintJob.objects.create(
-            print_request=print_request,
-            printer=printer,
-            job_status=PrintJob.STATUS_COMPLETED,
-            completed_at=timezone.now(),
-)
+            print_job = PrintJob.objects.create(
+                print_request=print_request,
+                printer=printer,
+                job_status=PrintJob.STATUS_COMPLETED,
+                completed_at=timezone.now(),
+            )
 
             AuditLog.objects.create(
                 user=request.user,
@@ -201,6 +201,19 @@ def payment(request, request_id):
                 event_type=AuditLog.EVENT_PRINT_JOB_CREATED,
                 description=f"Print job created for request #{print_request.id}.",
             )
+
+            file_deleted = print_request.document.delete_file_from_storage()
+
+            if file_deleted:
+                AuditLog.objects.create(
+                    user=request.user,
+                    print_request=print_request,
+                    event_type=AuditLog.EVENT_DOCUMENT_DELETED,
+                    description=(
+                        f"Uploaded document file for request #{print_request.id} "
+                        f"was deleted from storage after print job completion."
+                    ),
+                )
 
             return redirect("request_status", request_id=print_request.id)
 
@@ -222,6 +235,19 @@ def payment(request, request_id):
                 description=f"Payment rejected for request #{print_request.id}.",
             )
 
+            file_deleted = print_request.document.delete_file_from_storage()
+
+            if file_deleted:
+                AuditLog.objects.create(
+                    user=request.user,
+                    print_request=print_request,
+                    event_type=AuditLog.EVENT_DOCUMENT_DELETED,
+                    description=(
+                        f"Uploaded document file for request #{print_request.id} "
+                        f"was deleted from storage after payment rejection."
+                    ),
+                )
+
             return redirect("request_status", request_id=print_request.id)
 
     return render(
@@ -231,7 +257,6 @@ def payment(request, request_id):
             "print_request": print_request,
         },
     )
-
 
 @login_required
 def request_status(request, request_id):
@@ -529,6 +554,19 @@ def api_confirm_payment(request, request_id):
         description=f"API print job created for request #{print_request.id}.",
     )
 
+    file_deleted = print_request.document.delete_file_from_storage()
+
+    if file_deleted:
+        AuditLog.objects.create(
+            user=request.user,
+            print_request=print_request,
+            event_type=AuditLog.EVENT_DOCUMENT_DELETED,
+            description=(
+                f"API uploaded document file for request #{print_request.id} "
+                f"was deleted from storage after print job completion."
+            ),
+        )
+
     return Response(
         {
             "message": "Payment confirmed and print job created.",
@@ -536,10 +574,10 @@ def api_confirm_payment(request, request_id):
             "payment_status": payment_transaction.payment_status,
             "print_job_id": print_job.id,
             "print_job_status": print_job.job_status,
+            "document_file_deleted": file_deleted,
         },
         status=201,
     )
-
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -574,11 +612,25 @@ def api_reject_payment(request, request_id):
         description=f"API payment rejected for request #{print_request.id}.",
     )
 
+    file_deleted = print_request.document.delete_file_from_storage()
+
+    if file_deleted:
+        AuditLog.objects.create(
+            user=request.user,
+            print_request=print_request,
+            event_type=AuditLog.EVENT_DOCUMENT_DELETED,
+            description=(
+                f"API uploaded document file for request #{print_request.id} "
+                f"was deleted from storage after payment rejection."
+            ),
+        )
+
     return Response(
         {
             "message": "Payment rejected.",
             "payment_id": payment_transaction.id,
             "payment_status": payment_transaction.payment_status,
+            "document_file_deleted": file_deleted,
         },
         status=201,
     )
