@@ -178,13 +178,15 @@ def print_settings(request, document_id):
         },
     )
 
-
 @login_required
 def payment(request, request_id):
     print_request = get_user_print_request_or_404(request, request_id)
     existing_payment = PaymentTransaction.objects.filter(print_request=print_request).first()
 
     if existing_payment:
+        return redirect("request_status", request_id=print_request.id)
+
+    if print_request.status != PrintRequest.STATUS_AWAITING_PAYMENT:
         return redirect("request_status", request_id=print_request.id)
 
     if request.method == "POST":
@@ -561,6 +563,15 @@ def api_confirm_payment(request, request_id):
             status=400,
         )
 
+    if print_request.status != PrintRequest.STATUS_AWAITING_PAYMENT:
+        return Response(
+            {
+                "message": "This print request is not awaiting payment.",
+                "current_status": print_request.status,
+            },
+            status=400,
+        )
+
     payment_transaction = PaymentTransaction.objects.create(
         print_request=print_request,
         amount=print_request.total_price,
@@ -638,6 +649,15 @@ def api_reject_payment(request, request_id):
             {
                 "message": "Payment was already processed for this request.",
                 "payment_status": existing_payment.payment_status,
+            },
+            status=400,
+        )
+
+    if print_request.status != PrintRequest.STATUS_AWAITING_PAYMENT:
+        return Response(
+            {
+                "message": "This print request is not awaiting payment.",
+                "current_status": print_request.status,
             },
             status=400,
         )
