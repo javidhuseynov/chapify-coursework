@@ -2,7 +2,7 @@ import os
 
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import FormParser, MultiPartParser
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .serializers import (
@@ -30,6 +30,7 @@ from .models import (
     PrintJob,
     PrintRequest,
     PrintSettings,
+    Profile,
 )
 
 def get_user_print_request_or_404(request, request_id):
@@ -45,6 +46,20 @@ def get_user_document_or_404(request, document_id):
         Document,
         id=document_id,
         user=request.user,
+    )
+
+def is_chapify_admin(user):
+    return (
+        user.is_authenticated
+        and hasattr(user, "profile")
+        and user.profile.role == Profile.ROLE_ADMIN
+    )
+
+
+def admin_required_response():
+    return Response(
+        {"detail": "Administrator privileges are required."},
+        status=403,
     )
 
 def home(request):
@@ -376,8 +391,11 @@ def api_my_print_jobs(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def api_admin_summary(request):
+    if not is_chapify_admin(request.user):
+        return admin_required_response()
+
     data = {
         "total_requests": PrintRequest.objects.count(),
         "confirmed_payments": PaymentTransaction.objects.filter(
@@ -398,40 +416,55 @@ def api_admin_summary(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def api_admin_requests(request):
+    if not is_chapify_admin(request.user):
+        return admin_required_response()
+
     print_requests = PrintRequest.objects.all().order_by("-created_at")
     serializer = PrintRequestSerializer(print_requests, many=True)
     return Response(serializer.data)
 
 
 @api_view(["GET"])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def api_admin_transactions(request):
+    if not is_chapify_admin(request.user):
+        return admin_required_response()
+
     payments = PaymentTransaction.objects.all().order_by("-payment_date")
     serializer = PaymentTransactionSerializer(payments, many=True)
     return Response(serializer.data)
 
 
 @api_view(["GET"])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def api_admin_print_jobs(request):
+    if not is_chapify_admin(request.user):
+        return admin_required_response()
+
     jobs = PrintJob.objects.all().order_by("-created_at")
     serializer = PrintJobSerializer(jobs, many=True)
     return Response(serializer.data)
 
 
 @api_view(["GET"])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def api_admin_printers(request):
+    if not is_chapify_admin(request.user):
+        return admin_required_response()
+
     printers = Printer.objects.all().order_by("printer_name")
     serializer = PrinterSerializer(printers, many=True)
     return Response(serializer.data)
 
 
 @api_view(["GET"])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def api_admin_audit_logs(request):
+    if not is_chapify_admin(request.user):
+        return admin_required_response()
+
     logs = AuditLog.objects.all().order_by("-event_timestamp")[:100]
     serializer = AuditLogSerializer(logs, many=True)
     return Response(serializer.data)
