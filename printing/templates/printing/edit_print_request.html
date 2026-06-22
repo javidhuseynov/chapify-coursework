@@ -1,28 +1,94 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Edit Print Request</title>
-</head>
-<body>
-    <h1>Edit Print Request #{{ print_request.id }}</h1>
+{% extends "printing/base.html" %}
 
-    <p>
-        Document: <strong>{{ print_request.document.file_name }}</strong>
-    </p>
+{% block title %}Edit Print Request{% endblock %}
 
-    <p>
-        Current price: <strong>{{ print_request.total_price }} EUR</strong>
-    </p>
+{% block content %}
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>Edit Print Request #{{ print_request.id }}</h1>
+            <p class="text-muted">Modify print settings before payment is processed.</p>
+        </div>
 
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
+        <a href="{% url 'request_status' print_request.id %}" class="btn btn-outline-secondary">
+            Back to Request Status
+        </a>
+    </div>
 
-        <button type="submit">Save Changes and Recalculate Price</button>
-    </form>
+    <div class="row">
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    <h4 class="mb-0">Edit Print Settings</h4>
+                </div>
 
-    <p>
-        <a href="{% url 'request_status' print_request.id %}">Back to Request Status</a>
-    </p>
-</body>
-</html>
+                <div class="card-body">
+                    <p>
+                        Document:
+                        <strong>{{ print_request.document.file_name }}</strong>
+                    </p>
+
+                    <p>
+                        Current price:
+                        <strong>{{ print_request.total_price }} EUR</strong>
+                    </p>
+
+                    <form method="post">
+                        {% csrf_token %}
+
+                        {% for field in form %}
+                            <div class="mb-3">
+                                <label class="form-label" for="{{ field.id_for_label }}">
+                                    {{ field.label }}
+                                </label>
+
+                                {{ field }}
+
+                                {% if field.help_text %}
+                                    <div class="form-text">{{ field.help_text }}</div>
+                                {% endif %}
+
+                                {% for error in field.errors %}
+                                    <div class="text-danger">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        {% endfor %}
+
+                        <button type="submit" class="btn btn-dark">
+                            Save Changes and Recalculate Price
+                        </button>
+
+                        <a href="{% url 'request_status' print_request.id %}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    <h4 class="mb-0">Editing Rules</h4>
+                </div>
+
+                <div class="card-body">
+                    <p>
+                        This request can be edited because it is still awaiting payment.
+                    </p>
+
+                    <ol>
+                        <li>Change pages, copies, color mode, paper format, or duplex mode.</li>
+                        <li>The system recalculates the total price.</li>
+                        <li>After saving, the request returns to the payment step.</li>
+                    </ol>
+
+                    <p class="text-muted mb-0">
+                        Requests cannot be edited after payment is confirmed or rejected.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

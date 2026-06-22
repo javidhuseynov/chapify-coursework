@@ -1,27 +1,54 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Cancel Print Request</title>
-</head>
-<body>
-    <h1>Cancel Print Request #{{ print_request.id }}</h1>
+{% extends "printing/base.html" %}
 
-    <p>
-        Are you sure you want to cancel this print request?
-    </p>
+{% block title %}Cancel Print Request{% endblock %}
 
-    <p>
-        Document: <strong>{{ print_request.document.file_name }}</strong><br>
-        Total price: <strong>{{ print_request.total_price }} EUR</strong>
-    </p>
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">Cancel Print Request #{{ print_request.id }}</h4>
+                </div>
 
-    <form method="post">
-        {% csrf_token %}
-        <button type="submit">Yes, Cancel Request</button>
-    </form>
+                <div class="card-body">
+                    <p>
+                        Are you sure you want to cancel this print request?
+                    </p>
 
-    <p>
-        <a href="{% url 'request_status' print_request.id %}">No, Go Back</a>
-    </p>
-</body>
-</html>
+                    <table class="table table-bordered">
+                        <tr>
+                            <th>Document</th>
+                            <td>{{ print_request.document.file_name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Status</th>
+                            <td>{{ print_request.status }}</td>
+                        </tr>
+                        <tr>
+                            <th>Total Price</th>
+                            <td>{{ print_request.total_price }} EUR</td>
+                        </tr>
+                    </table>
+
+                    <p class="text-muted">
+                        If the request is cancelled, the uploaded temporary document file will be deleted from storage.
+                    </p>
+
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <button type="submit" class="btn btn-danger">
+                            Yes, Cancel Request
+                        </button>
+
+                        <a href="{% url 'request_status' print_request.id %}" class="btn btn-outline-secondary">
+                            No, Go Back
+                        </a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

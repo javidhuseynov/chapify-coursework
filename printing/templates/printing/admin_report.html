@@ -1,127 +1,241 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Chapify Administrative Report</title>
-</head>
-<body>
-    <h1>Chapify Administrative Report</h1>
+{% extends "printing/base.html" %}
 
-    <p>
-        <a href="{% url 'admin_dashboard' %}">Back to Admin Dashboard</a>
-    </p>
+{% block title %}Administrative Report{% endblock %}
 
-    <h2>Summary</h2>
+{% block content %}
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>Chapify Administrative Report</h1>
+            <p class="text-muted">
+                Summary of print requests, payments, print jobs, and audit activity.
+            </p>
+        </div>
 
-    <table border="1" cellpadding="6">
-        <tr>
-            <th>Total Print Requests</th>
-            <td>{{ total_requests }}</td>
-        </tr>
-        <tr>
-            <th>Confirmed Payments</th>
-            <td>{{ confirmed_payments_count }}</td>
-        </tr>
-        <tr>
-            <th>Rejected Payments</th>
-            <td>{{ rejected_payments_count }}</td>
-        </tr>
-        <tr>
-            <th>Total Confirmed Amount</th>
-            <td>{{ total_confirmed_amount }} EUR</td>
-        </tr>
-    </table>
+        <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-secondary">
+            Back to Admin Dashboard
+        </a>
+    </div>
 
-    <h2>Requests by Status</h2>
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-dark text-white">
+            <h4 class="mb-0">Summary</h4>
+        </div>
 
-    <table border="1" cellpadding="6">
-        <tr>
-            <th>Status</th>
-            <th>Count</th>
-        </tr>
-        {% for item in requests_by_status %}
-            <tr>
-                <td>{{ item.status }}</td>
-                <td>{{ item.total }}</td>
-            </tr>
-        {% endfor %}
-    </table>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="border rounded p-3 text-center">
+                        <h5>Total Requests</h5>
+                        <p class="fs-4 mb-0">{{ total_requests }}</p>
+                    </div>
+                </div>
 
-    <h2>Payments by Status</h2>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 text-center">
+                        <h5>Confirmed Payments</h5>
+                        <p class="fs-4 mb-0">{{ confirmed_payments_count }}</p>
+                    </div>
+                </div>
 
-    <table border="1" cellpadding="6">
-        <tr>
-            <th>Status</th>
-            <th>Count</th>
-        </tr>
-        {% for item in payments_by_status %}
-            <tr>
-                <td>{{ item.payment_status }}</td>
-                <td>{{ item.total }}</td>
-            </tr>
-        {% endfor %}
-    </table>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 text-center">
+                        <h5>Rejected Payments</h5>
+                        <p class="fs-4 mb-0">{{ rejected_payments_count }}</p>
+                    </div>
+                </div>
 
-    <h2>Print Jobs by Status</h2>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 text-center">
+                        <h5>Total Amount</h5>
+                        <p class="fs-4 mb-0">{{ total_confirmed_amount }} EUR</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    <table border="1" cellpadding="6">
-        <tr>
-            <th>Status</th>
-            <th>Count</th>
-        </tr>
-        {% for item in jobs_by_status %}
-            <tr>
-                <td>{{ item.job_status }}</td>
-                <td>{{ item.total }}</td>
-            </tr>
-        {% endfor %}
-    </table>
+    <div class="row g-4 mb-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-dark text-white">
+                    <h4 class="mb-0">Requests by Status</h4>
+                </div>
 
-    <h2>Recent Print Requests</h2>
+                <div class="card-body">
+                    <table class="table table-bordered table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Status</th>
+                                <th>Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in requests_by_status %}
+                                <tr>
+                                    <td>{{ item.status }}</td>
+                                    <td>{{ item.total }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="2" class="text-muted">No request data.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
-    <table border="1" cellpadding="6">
-        <tr>
-            <th>ID</th>
-            <th>User</th>
-            <th>Document</th>
-            <th>Status</th>
-            <th>Total Price</th>
-            <th>Created At</th>
-        </tr>
-        {% for request_item in recent_requests %}
-            <tr>
-                <td>#{{ request_item.id }}</td>
-                <td>{{ request_item.user.username }}</td>
-                <td>{{ request_item.document.file_name }}</td>
-                <td>{{ request_item.status }}</td>
-                <td>{{ request_item.total_price }} EUR</td>
-                <td>{{ request_item.created_at }}</td>
-            </tr>
-        {% endfor %}
-    </table>
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-dark text-white">
+                    <h4 class="mb-0">Payments by Status</h4>
+                </div>
 
-    <h2>Recent Audit Logs</h2>
+                <div class="card-body">
+                    <table class="table table-bordered table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Status</th>
+                                <th>Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in payments_by_status %}
+                                <tr>
+                                    <td>{{ item.payment_status }}</td>
+                                    <td>{{ item.total }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="2" class="text-muted">No payment data.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
-    <table border="1" cellpadding="6">
-        <tr>
-            <th>Timestamp</th>
-            <th>User</th>
-            <th>Event Type</th>
-            <th>Description</th>
-        </tr>
-        {% for log in recent_logs %}
-            <tr>
-                <td>{{ log.event_timestamp }}</td>
-                <td>
-                    {% if log.user %}
-                        {{ log.user.username }}
-                    {% else %}
-                        -
-                    {% endif %}
-                </td>
-                <td>{{ log.event_type }}</td>
-                <td>{{ log.description }}</td>
-            </tr>
-        {% endfor %}
-    </table>
-</body>
-</html>
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-dark text-white">
+                    <h4 class="mb-0">Print Jobs by Status</h4>
+                </div>
+
+                <div class="card-body">
+                    <table class="table table-bordered table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Status</th>
+                                <th>Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in jobs_by_status %}
+                                <tr>
+                                    <td>{{ item.job_status }}</td>
+                                    <td>{{ item.total }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="2" class="text-muted">No print job data.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-dark text-white">
+            <h4 class="mb-0">Recent Print Requests</h4>
+        </div>
+
+        <div class="card-body">
+            {% if recent_requests %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>User</th>
+                                <th>Document</th>
+                                <th>Status</th>
+                                <th>Total Price</th>
+                                <th>Created At</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for request_item in recent_requests %}
+                                <tr>
+                                    <td>#{{ request_item.id }}</td>
+                                    <td>{{ request_item.user.username }}</td>
+                                    <td>{{ request_item.document.file_name }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            {{ request_item.status }}
+                                        </span>
+                                    </td>
+                                    <td>{{ request_item.total_price }} EUR</td>
+                                    <td>{{ request_item.created_at }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No recent print requests.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-5">
+        <div class="card-header bg-dark text-white">
+            <h4 class="mb-0">Recent Audit Logs</h4>
+        </div>
+
+        <div class="card-body">
+            {% if recent_logs %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>User</th>
+                                <th>Event Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in recent_logs %}
+                                <tr>
+                                    <td>{{ log.event_timestamp }}</td>
+                                    <td>
+                                        {% if log.user %}
+                                            {{ log.user.username }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            {{ log.event_type }}
+                                        </span>
+                                    </td>
+                                    <td>{{ log.description }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No audit logs available.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
