@@ -46,3 +46,5 @@ htmlcov/
 *.tmp
 *.swp
 *.ps1~
+chapify_mobile/
+project_tree.txt
