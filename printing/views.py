@@ -1,5 +1,6 @@
 import os
 
+from django.db.models import Count, Q, Sum
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -305,24 +306,240 @@ def request_status(request, request_id):
         },
     )
 
+
 @login_required
 def request_history(request):
     print_requests = (
         PrintRequest.objects
         .filter(user=request.user)
+        .select_related("document", "settings")
         .order_by("-created_at")
     )
+
+    status_filter = request.GET.get("status", "").strip()
+    search_query = request.GET.get("q", "").strip()
+
+    if status_filter:
+        print_requests = print_requests.filter(status=status_filter)
+
+    if search_query:
+        query_filter = Q(document__file_name__icontains=search_query)
+
+        if search_query.isdigit():
+            query_filter |= Q(id=int(search_query))
+
+        print_requests = print_requests.filter(query_filter)
 
     return render(
         request,
         "printing/request_history.html",
         {
             "print_requests": print_requests,
+            "status_choices": PrintRequest.STATUS_CHOICES,
+            "selected_status": status_filter,
+            "search_query": search_query,
         },
     )
 
+
+@login_required
+def edit_print_request(request, request_id):
+    print_request = get_user_print_request_or_404(request, request_id)
+
+    existing_payment = PaymentTransaction.objects.filter(
+        print_request=print_request
+    ).first()
+
+    if existing_payment or print_request.status != PrintRequest.STATUS_AWAITING_PAYMENT:
+        return redirect("request_status", request_id=print_request.id)
+
+    if request.method == "POST":
+        form = PrintSettingsForm(request.POST)
+
+        if form.is_valid():
+            settings = print_request.settings
+
+            settings.copies = form.cleaned_data["copies"]
+            settings.color_mode = form.cleaned_data["color_mode"]
+            settings.paper_format = form.cleaned_data["paper_format"]
+            settings.duplex_mode = form.cleaned_data["duplex_mode"]
+            settings.save()
+
+            print_request.document_pages = form.cleaned_data["document_pages"]
+            print_request.status = PrintRequest.STATUS_PRICE_CALCULATED
+            print_request.calculate_price()
+            print_request.status = PrintRequest.STATUS_AWAITING_PAYMENT
+            print_request.save()
+
+            AuditLog.objects.create(
+                user=request.user,
+                print_request=print_request,
+                event_type=AuditLog.EVENT_ADMIN_ACTION,
+                description=(
+                    f"User updated print request #{print_request.id}. "
+                    f"New pages: {print_request.document_pages}, "
+                    f"copies: {settings.copies}, "
+                    f"total price: {print_request.total_price:.2f} EUR."
+                ),
+            )
+
+            return redirect("payment", request_id=print_request.id)
+    else:
+        form = PrintSettingsForm(
+            initial={
+                "document_pages": print_request.document_pages,
+                "copies": print_request.settings.copies,
+                "color_mode": print_request.settings.color_mode,
+                "paper_format": print_request.settings.paper_format,
+                "duplex_mode": print_request.settings.duplex_mode,
+            }
+        )
+
+    return render(
+        request,
+        "printing/edit_print_request.html",
+        {
+            "form": form,
+            "print_request": print_request,
+        },
+    )
+
+
+@login_required
+def cancel_print_request(request, request_id):
+    print_request = get_user_print_request_or_404(request, request_id)
+
+    existing_payment = PaymentTransaction.objects.filter(
+        print_request=print_request
+    ).first()
+
+    if existing_payment or print_request.status != PrintRequest.STATUS_AWAITING_PAYMENT:
+        return redirect("request_status", request_id=print_request.id)
+
+    if request.method == "POST":
+        print_request.status = PrintRequest.STATUS_CANCELLED
+        print_request.save()
+
+        file_deleted = print_request.document.delete_file_from_storage()
+
+        AuditLog.objects.create(
+            user=request.user,
+            print_request=print_request,
+            event_type=AuditLog.EVENT_ADMIN_ACTION,
+            description=(
+                f"User cancelled print request #{print_request.id}. "
+                f"Uploaded file deleted: {file_deleted}."
+            ),
+        )
+
+        if file_deleted:
+            AuditLog.objects.create(
+                user=request.user,
+                print_request=print_request,
+                event_type=AuditLog.EVENT_DOCUMENT_DELETED,
+                description=(
+                    f"Uploaded document file for cancelled request "
+                    f"#{print_request.id} was deleted from storage."
+                ),
+            )
+
+        return redirect("request_history")
+
+    return render(
+        request,
+        "printing/cancel_print_request.html",
+        {
+            "print_request": print_request,
+        },
+    )
+
+
+@staff_member_required
+def admin_report(request):
+    total_requests = PrintRequest.objects.count()
+    confirmed_payments = PaymentTransaction.objects.filter(
+        payment_status=PaymentTransaction.STATUS_CONFIRMED
+    )
+    rejected_payments = PaymentTransaction.objects.filter(
+        payment_status=PaymentTransaction.STATUS_REJECTED
+    )
+
+    total_confirmed_amount = confirmed_payments.aggregate(
+        total=Sum("amount")
+    )["total"] or 0
+
+    requests_by_status = (
+        PrintRequest.objects
+        .values("status")
+        .annotate(total=Count("id"))
+        .order_by("status")
+    )
+
+    payments_by_status = (
+        PaymentTransaction.objects
+        .values("payment_status")
+        .annotate(total=Count("id"))
+        .order_by("payment_status")
+    )
+
+    jobs_by_status = (
+        PrintJob.objects
+        .values("job_status")
+        .annotate(total=Count("id"))
+        .order_by("job_status")
+    )
+
+    recent_requests = (
+        PrintRequest.objects
+        .select_related("user", "document", "settings")
+        .order_by("-created_at")[:20]
+    )
+
+    recent_logs = AuditLog.objects.order_by("-event_timestamp")[:20]
+
+    return render(
+        request,
+        "printing/admin_report.html",
+        {
+            "total_requests": total_requests,
+            "confirmed_payments_count": confirmed_payments.count(),
+            "rejected_payments_count": rejected_payments.count(),
+            "total_confirmed_amount": total_confirmed_amount,
+            "requests_by_status": requests_by_status,
+            "payments_by_status": payments_by_status,
+            "jobs_by_status": jobs_by_status,
+            "recent_requests": recent_requests,
+            "recent_logs": recent_logs,
+        },
+    )
+
+
+
 @staff_member_required
 def admin_dashboard(request):
+    requests = (
+        PrintRequest.objects
+        .select_related("user", "document", "settings")
+        .order_by("-created_at")
+    )
+
+    status_filter = request.GET.get("status", "").strip()
+    search_query = request.GET.get("q", "").strip()
+
+    if status_filter:
+        requests = requests.filter(status=status_filter)
+
+    if search_query:
+        query_filter = (
+            Q(document__file_name__icontains=search_query)
+            | Q(user__username__icontains=search_query)
+        )
+
+        if search_query.isdigit():
+            query_filter |= Q(id=int(search_query))
+
+        requests = requests.filter(query_filter)
+
     total_requests = PrintRequest.objects.count()
     confirmed_payments = PaymentTransaction.objects.filter(
         payment_status=PaymentTransaction.STATUS_CONFIRMED
@@ -337,8 +554,8 @@ def admin_dashboard(request):
         job_status=PrintJob.STATUS_FAILED
     ).count()
 
-    recent_requests = PrintRequest.objects.order_by("-created_at")[:5]
-    recent_logs = AuditLog.objects.order_by("-event_timestamp")[:5]
+    recent_requests = requests[:10]
+    recent_logs = AuditLog.objects.order_by("-event_timestamp")[:10]
 
     return render(
         request,
@@ -351,13 +568,32 @@ def admin_dashboard(request):
             "failed_jobs": failed_jobs,
             "recent_requests": recent_requests,
             "recent_logs": recent_logs,
+            "status_choices": PrintRequest.STATUS_CHOICES,
+            "selected_status": status_filter,
+            "search_query": search_query,
         },
     )
+
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def api_my_requests(request):
     print_requests = PrintRequest.objects.filter(user=request.user).order_by("-created_at")
+
+    status_filter = request.GET.get("status", "").strip()
+    search_query = request.GET.get("q", "").strip()
+
+    if status_filter:
+        print_requests = print_requests.filter(status=status_filter)
+
+    if search_query:
+        query_filter = Q(document__file_name__icontains=search_query)
+
+        if search_query.isdigit():
+            query_filter |= Q(id=int(search_query))
+
+        print_requests = print_requests.filter(query_filter)
+
     serializer = PrintRequestSerializer(print_requests, many=True)
     return Response(serializer.data)
 
@@ -424,6 +660,24 @@ def api_admin_requests(request):
         return admin_required_response()
 
     print_requests = PrintRequest.objects.all().order_by("-created_at")
+
+    status_filter = request.GET.get("status", "").strip()
+    search_query = request.GET.get("q", "").strip()
+
+    if status_filter:
+        print_requests = print_requests.filter(status=status_filter)
+
+    if search_query:
+        query_filter = (
+            Q(document__file_name__icontains=search_query)
+            | Q(user__username__icontains=search_query)
+        )
+
+        if search_query.isdigit():
+            query_filter |= Q(id=int(search_query))
+
+        print_requests = print_requests.filter(query_filter)
+
     serializer = PrintRequestSerializer(print_requests, many=True)
     return Response(serializer.data)
 

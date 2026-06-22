@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Print Request</title>
+</head>
+<body>
+    <h1>Edit Print Request #{{ print_request.id }}</h1>
+
+    <p>
+        Document: <strong>{{ print_request.document.file_name }}</strong>
+    </p>
+
+    <p>
+        Current price: <strong>{{ print_request.total_price }} EUR</strong>
+    </p>
+
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+
+        <button type="submit">Save Changes and Recalculate Price</button>
+    </form>
+
+    <p>
+        <a href="{% url 'request_status' print_request.id %}">Back to Request Status</a>
+    </p>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cancel Print Request</title>
+</head>
+<body>
+    <h1>Cancel Print Request #{{ print_request.id }}</h1>
+
+    <p>
+        Are you sure you want to cancel this print request?
+    </p>
+
+    <p>
+        Document: <strong>{{ print_request.document.file_name }}</strong><br>
+        Total price: <strong>{{ print_request.total_price }} EUR</strong>
+    </p>
+
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">Yes, Cancel Request</button>
+    </form>
+
+    <p>
+        <a href="{% url 'request_status' print_request.id %}">No, Go Back</a>
+    </p>
+</body>
+</html>

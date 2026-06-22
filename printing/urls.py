@@ -12,7 +12,13 @@ urlpatterns = [
     path("payment/<int:request_id>/", views.payment, name="payment"),
     path("status/<int:request_id>/", views.request_status, name="request_status"),
     path("history/", views.request_history, name="request_history"),
+
+    path("request/<int:request_id>/edit/", views.edit_print_request, name="edit_print_request"),
+    path("request/<int:request_id>/cancel/", views.cancel_print_request, name="cancel_print_request"),
+
     path("admin-dashboard/", views.admin_dashboard, name="admin_dashboard"),
+    path("admin-report/", views.admin_report, name="admin_report"),
+
     path("api/my/requests/", views.api_my_requests, name="api_my_requests"),
     path("api/my/requests/<int:request_id>/", views.api_request_detail, name="api_request_detail"),
     path("api/my/payments/", views.api_my_payments, name="api_my_payments"),
@@ -24,6 +30,7 @@ urlpatterns = [
     path("api/admin/print-jobs/", views.api_admin_print_jobs, name="api_admin_print_jobs"),
     path("api/admin/printers/", views.api_admin_printers, name="api_admin_printers"),
     path("api/admin/audit-logs/", views.api_admin_audit_logs, name="api_admin_audit_logs"),
+
     path("api/requests/create/", views.api_create_print_request, name="api_create_print_request"),
     path("api/requests/<int:request_id>/payment/confirm/", views.api_confirm_payment, name="api_confirm_payment"),
     path("api/requests/<int:request_id>/payment/reject/", views.api_reject_payment, name="api_reject_payment"),

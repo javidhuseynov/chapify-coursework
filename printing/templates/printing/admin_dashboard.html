@@ -3,6 +3,30 @@
 {% block title %}Admin Dashboard - Chapify{% endblock %}
 
 {% block content %}
+<p>
+    <a href="{% url 'admin_report' %}">Open Administrative Report</a>
+</p>
+
+<h2>Search and Filter Requests</h2>
+
+<form method="get">
+    <label for="q">Search by request ID, username, or document name:</label>
+    <input type="text" id="q" name="q" value="{{ search_query }}">
+
+    <label for="status">Status:</label>
+    <select id="status" name="status">
+        <option value="">All statuses</option>
+        {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>
+                {{ label }}
+            </option>
+        {% endfor %}
+    </select>
+
+    <button type="submit">Apply</button>
+    <a href="{% url 'admin_dashboard' %}">Clear</a>
+</form>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h2 class="mb-1">Administrator Dashboard</h2>
