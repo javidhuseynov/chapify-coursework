@@ -15,6 +15,9 @@ print queue, payments, printers and the audit log.
   the admin dashboard). No physical printer is needed.
 - **Stack:** Python 3.12+, Django 6.0, Django REST Framework, SQLite, Bootstrap 5.
 
+**Documentation:** [User guide](docs/USER_GUIDE.md) · [Administrator guide](docs/ADMIN_GUIDE.md) ·
+[Requirement-to-test traceability](docs/TRACEABILITY.md). This README is the developer guide.
+
 The course-work version of June 2026 is tagged `coursework-baseline`; everything after that tag
 is bachelor's-thesis work (`git log coursework-baseline..HEAD`).
 
@@ -80,6 +83,9 @@ normal setup: migrations are part of the repository.
 
 ## 2. Demonstration walkthrough
 
+Optional: fill the database first with `python manage.py seed_demo --password <choose-a-password>`
+(demo accounts `demo_admin`, `demo_student`, `demo_student2` and requests in every state).
+
 1. Register a user (or log in) and choose **New Request**.
 2. Upload a PDF (max 5 MB, not password-protected). The page count is read from the file; choose copies, colour, paper and duplex.
 3. On the payment page press **Pay**. You are sent to the Chapify Pay test checkout.
@@ -126,6 +132,12 @@ calculated with exact decimals and rounded half-up to cents (`printing/pricing.p
 5. Refused notifications are written to the audit log (`PAYMENT_NOTIFICATION_REFUSED`).
 
 No endpoint lets a user confirm a payment. Chapify never sees card data.
+
+Other protections: login lockout after 5 failed attempts per username + IP for 15 minutes (web
+and API), sessions expire after 8 hours or at browser close, Chapify refuses to start with
+`DEBUG` off and the development secrets, and `CHAPIFY_HTTPS=True` enables HTTPS-only cookies,
+redirect and HSTS. CI checks that configuration with `check --deploy`. Details and the matching
+tests: [docs/TRACEABILITY.md](docs/TRACEABILITY.md).
 
 ## 5. Roles and administration
 
@@ -183,7 +195,8 @@ Open the returned `checkout_url` in a browser to approve or decline the payment.
 | Command | Purpose |
 |---|---|
 | `python manage.py run_print_simulator [--once] [--fail-rate 0.2] [--seconds-per-page 0.5]` | Simulated print server |
-| `python manage.py cleanup_documents [--hours 24] [--dry-run]` | Retention policy: expire unpaid requests, delete abandoned uploads |
+| `python manage.py cleanup_documents [--hours 24] [--dry-run]` | Retention policy: expire unpaid requests, delete abandoned uploads and old files of failed jobs |
+| `python manage.py seed_demo [--password <pw>]` | Demonstration data: demo accounts, printers, requests in every state |
 
 ## 8. Tests
 
