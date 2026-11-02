@@ -1,5 +1,7 @@
 # Chapify
 
+![Tests](https://github.com/javidhuseynov/chapify-coursework/actions/workflows/tests.yml/badge.svg)
+
 Self-service printing information system with integrated micro-payment functionality
 (bachelor's thesis project, Vilnius University Kaunas Faculty).
 
@@ -165,6 +167,10 @@ Open the returned `checkout_url` in a browser to approve or decline the payment.
 ```powershell
 python manage.py test
 ```
+
+GitHub Actions runs the same checks (`check`, `makemigrations --check`, `test`) automatically on
+every push to `main` and every pull request, on Windows and Linux with Python 3.12 and 3.13
+(`.github/workflows/tests.yml`). Results: repository → **Actions** tab.
 
 Test modules (`printing/tests/`): pricing and signatures, workflow rules, payment security
 (tampering, replay, amount mismatch, expiry, no self-confirmation), print queue and retention,
