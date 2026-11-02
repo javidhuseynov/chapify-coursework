@@ -1,0 +1,81 @@
+{% extends "printing/base.html" %}
+
+{% block title %}Payment Transactions - Chapify{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1">Payment Transactions</h2>
+        <p class="text-muted mb-0">All payment attempts with their gateway result. No card data is stored.</p>
+    </div>
+    <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-secondary">Back to dashboard</a>
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-4">
+    <div class="col-md-6">
+        <label for="q" class="form-label">Search by username, request ID, payment reference or gateway transaction</label>
+        <input type="text" id="q" name="q" class="form-control" value="{{ search_query }}">
+    </div>
+    <div class="col-md-4">
+        <label for="status" class="form-label">Payment status</label>
+        <select id="status" name="status" class="form-select">
+            <option value="">All</option>
+            {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button type="submit" class="btn btn-dark w-100">Apply</button>
+    </div>
+</form>
+
+<div class="alert alert-light border">
+    Confirmed amount in the current selection: <strong>{{ confirmed_total }} EUR</strong>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        {% if transactions %}
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>User</th>
+                            <th>Request</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Payment reference</th>
+                            <th>Gateway transaction</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for payment in transactions %}
+                        <tr>
+                            <td>{{ payment.payment_date|date:"Y-m-d H:i" }}</td>
+                            <td>{{ payment.print_request.user.username }}</td>
+                            <td>#{{ payment.print_request_id }}</td>
+                            <td>{{ payment.amount }} {{ payment.currency }}</td>
+                            <td>
+                                {% if payment.payment_status == "CONFIRMED" %}
+                                    <span class="badge bg-success">{{ payment.get_payment_status_display }}</span>
+                                {% elif payment.payment_status == "REJECTED" %}
+                                    <span class="badge bg-danger">{{ payment.get_payment_status_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ payment.get_payment_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td><code>{{ payment.reference }}</code></td>
+                            <td>{{ payment.gateway_reference|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-muted mb-0">No transactions found.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

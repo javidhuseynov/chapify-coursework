@@ -28,6 +28,10 @@ class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default=ROLE_USER)
     account_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+
+    @property
+    def is_admin(self):
+        return self.role == self.ROLE_ADMIN
     
     def __str__(self):
         return f"{self.user.username} ({self.role})"
@@ -264,6 +268,8 @@ class PrintJob(models.Model):
 class AuditLog(models.Model):
     EVENT_LOGIN_SUCCESS = "LOGIN_SUCCESS"
     EVENT_LOGIN_FAILED = "LOGIN_FAILED"
+    EVENT_LOGOUT = "LOGOUT"
+    EVENT_ACCOUNT_REGISTERED = "ACCOUNT_REGISTERED"
     EVENT_DOCUMENT_UPLOADED = "DOCUMENT_UPLOADED"
     EVENT_DOCUMENT_VALIDATED = "DOCUMENT_VALIDATED"
     EVENT_DOCUMENT_DELETED = "DOCUMENT_DELETED"
@@ -282,6 +288,8 @@ class AuditLog(models.Model):
     EVENT_CHOICES = [
         (EVENT_LOGIN_SUCCESS, "Login success"),
         (EVENT_LOGIN_FAILED, "Login failed"),
+        (EVENT_LOGOUT, "Logout"),
+        (EVENT_ACCOUNT_REGISTERED, "Account registered"),
         (EVENT_DOCUMENT_UPLOADED, "Document uploaded"),
         (EVENT_DOCUMENT_VALIDATED, "Document validated"),
         (EVENT_DOCUMENT_DELETED, "Document deleted from storage"),

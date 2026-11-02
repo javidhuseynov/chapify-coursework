@@ -21,6 +21,12 @@ urlpatterns = [
     path("admin-dashboard/", views.admin_dashboard, name="admin_dashboard"),
     path("admin-report/", views.admin_report, name="admin_report"),
     path("admin-dashboard/process-print-job/", views.admin_process_print_job, name="admin_process_print_job"),
+    path("admin-dashboard/jobs/<int:job_id>/retry/", views.admin_retry_print_job, name="admin_retry_print_job"),
+    path("admin-users/", views.admin_users, name="admin_users"),
+    path("admin-users/<int:user_id>/action/", views.admin_user_action, name="admin_user_action"),
+    path("admin-transactions/", views.admin_transactions, name="admin_transactions"),
+    path("admin-printers/", views.admin_printers, name="admin_printers"),
+    path("admin-printers/<int:printer_id>/status/", views.admin_printer_status, name="admin_printer_status"),
 
     path("api/my/requests/", views.api_my_requests, name="api_my_requests"),
     path("api/my/requests/<int:request_id>/", views.api_request_detail, name="api_request_detail"),

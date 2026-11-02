@@ -7,7 +7,7 @@ from printing.models import Profile
 from .base import ChapifyTestCase
 
 USER_PAGES = ["payment", "request_status", "edit_print_request", "cancel_print_request"]
-ADMIN_PAGES = ["admin_dashboard", "admin_report"]
+ADMIN_PAGES = ["admin_dashboard", "admin_report", "admin_users", "admin_transactions", "admin_printers"]
 ADMIN_API = [
     "/api/admin/summary/",
     "/api/admin/requests/",

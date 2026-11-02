@@ -92,18 +92,21 @@ normal setup: migrations are part of the repository.
 
 ## 3. Request lifecycle
 
-```
-AWAITING_PAYMENT --(gateway: APPROVED)--> PAYMENT_CONFIRMED --(printed)--> COMPLETED
-       |   ^                                        |
-       |   |(user retries payment)                  +--(printer error)--> FAILED
-       |   |
-       +--(gateway: DECLINED)--> PAYMENT_REJECTED
-       |                               |
-       +-------(user cancels / not paid within retention period)------> CANCELLED
-```
+| From | To | Trigger |
+|---|---|---|
+| AWAITING_PAYMENT | PAYMENT_CONFIRMED | gateway notification APPROVED |
+| AWAITING_PAYMENT | PAYMENT_REJECTED | gateway notification DECLINED |
+| PAYMENT_REJECTED | AWAITING_PAYMENT | user pays again |
+| AWAITING_PAYMENT / PAYMENT_REJECTED | CANCELLED | user cancels, or not paid within the retention period |
+| PAYMENT_CONFIRMED | COMPLETED | print job completed |
+| PAYMENT_CONFIRMED | FAILED | print job failed |
+| FAILED | PAYMENT_CONFIRMED | administrator retries the job |
 
-Print jobs: `QUEUED -> IN_PROGRESS -> COMPLETED | FAILED`. The uploaded file is kept until the
-request reaches `COMPLETED`, `FAILED` or `CANCELLED`, then deleted.
+Any other change is refused (`printing/services.py`, `ALLOWED_TRANSITIONS`).
+
+Print jobs: `QUEUED -> IN_PROGRESS -> COMPLETED | FAILED` (an administrator can re-queue a failed job).
+The uploaded file is deleted when the request is `COMPLETED` or `CANCELLED`; a `FAILED` request keeps
+it for the retention period so the job can be retried.
 
 Price (thesis §4.5): `pages (counted from the PDF) x copies x 0.10 EUR x colour (1.0/2.0) x paper (A4 1.0 / A3 1.8) x duplex (1.0/0.9)`,
 calculated with exact decimals and rounded half-up to cents (`printing/pricing.py`).
@@ -124,12 +127,29 @@ calculated with exact decimals and rounded half-up to cents (`printing/pricing.p
 
 No endpoint lets a user confirm a payment. Chapify never sees card data.
 
-## 5. Roles
+## 5. Roles and administration
 
 - **User**: own requests only (other users' requests return HTTP 404).
 - **Administrator**: `Profile.role = ADMIN`. Accounts created with `createsuperuser` get this role
-  automatically; others can be promoted in Django admin -> Profiles. Used for the admin pages and
-  the `/api/admin/*` endpoints. (The Django admin site itself also needs Django's *staff status*.)
+  automatically; others are promoted on the **Users** page. Used for the admin pages and the
+  `/api/admin/*` endpoints. (The Django admin site itself also needs Django's *staff status*.)
+
+Administrator pages (links in the top navigation):
+
+| Page | Purpose |
+|---|---|
+| Admin Dashboard | Statistics, print queue, *Process next print job*, *Retry* for failed jobs, recent audit log |
+| Users | Search accounts, block/unblock, make admin/user (not your own account) |
+| Transactions | All payment attempts with status, payment reference and gateway transaction |
+| Printers | Add printers, set Available / Offline / Error (only Available printers receive jobs) |
+| Administrative Report | Summary counts and totals |
+
+A **blocked** account cannot log in, its open sessions end and its API tokens are deleted.
+A **failed** print job keeps its file so it can be retried; after the retention period the file
+is removed by `cleanup_documents`.
+
+Audit log events include logins, failed logins (username and IP address, never the password),
+logouts, registrations, account and printer changes, payments and every print job status change.
 
 ## 6. REST API
 

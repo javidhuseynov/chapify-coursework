@@ -43,7 +43,8 @@ class PrintJobLifecycleTests(ChapifyTestCase):
         self.assertEqual(job.failure_reason, "Simulated printer error.")
         self.print_request.refresh_from_db()
         self.assertEqual(self.print_request.status, PrintRequest.STATUS_FAILED)
-        self.assertFalse(self.print_request.document.has_file())
+        # Kept so that an administrator can retry; removed by the retention policy later.
+        self.assertTrue(self.print_request.document.has_file())
 
     def test_missing_file_fails_the_job(self):
         self.print_request.document.delete_file_from_storage()
@@ -118,6 +119,20 @@ class RetentionTests(ChapifyTestCase):
         self.assertTrue(recent.document.has_file())
         self.assertEqual(paid.status, PrintRequest.STATUS_PAYMENT_CONFIRMED)
         self.assertTrue(paid.document.has_file())  # still needed for printing
+
+    def test_failed_job_file_is_removed_after_retention_period(self):
+        Printer.objects.create(printer_name="P", location="L")
+        failed = self.make_paid_request(self.user)
+        services.process_next_print_job(force_failure=True)
+
+        services.cleanup_documents(older_than_hours=24)
+        failed.refresh_from_db()
+        self.assertTrue(failed.document.has_file())  # still within the retry window
+
+        PrintRequest.objects.filter(pk=failed.pk).update(updated_at=self.old)
+        summary = services.cleanup_documents(older_than_hours=24)
+        self.assertEqual(summary["terminal_files"], 1)
+        self.assertFalse(failed.document.has_file())
 
     def test_dry_run_changes_nothing(self):
         print_request = self.make_request(self.user)

@@ -1,7 +1,7 @@
 import json
 
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.db.models import Count, Q, Sum
@@ -23,6 +23,7 @@ from .models import (
     Printer,
     PrintJob,
     PrintRequest,
+    Profile,
 )
 from .permissions import IsChapifyAdmin, chapify_admin_required
 from .serializers import (
@@ -87,13 +88,12 @@ def register(request):
 
         if form.is_valid():
             user = form.save()  # the Profile is created by printing.signals
-            login(request, user)
-
             services.audit(
-                AuditLog.EVENT_LOGIN_SUCCESS,
-                f"New user registered and logged in: {user.username}",
+                AuditLog.EVENT_ACCOUNT_REGISTERED,
+                f"New account registered: {user.username}",
                 user=user,
             )
+            login(request, user)  # LOGIN_SUCCESS is logged by printing.signals
 
             return redirect("home")
     else:
@@ -443,6 +443,171 @@ def admin_process_print_job(request):
         messages.success(request, f"Print job #{job.id} completed on {job.printer}.")
     else:
         messages.warning(request, f"Print job #{job.id} failed: {job.failure_reason}")
+
+    return redirect("admin_dashboard")
+
+
+USER_ACTIONS = {
+    "block": ("status", Profile.STATUS_BLOCKED, "blocked"),
+    "unblock": ("status", Profile.STATUS_ACTIVE, "unblocked"),
+    "make_admin": ("role", Profile.ROLE_ADMIN, "is now an administrator"),
+    "make_user": ("role", Profile.ROLE_USER, "is now a normal user"),
+}
+
+
+@chapify_admin_required
+def admin_users(request):
+    """User account management (FR-13)."""
+    users = (
+        get_user_model().objects
+        .select_related("profile")
+        .annotate(request_count=Count("printrequest"))
+        .order_by("username")
+    )
+    search_query = request.GET.get("q", "").strip()
+    status_filter = request.GET.get("status", "").strip()
+
+    if search_query:
+        users = users.filter(Q(username__icontains=search_query) | Q(email__icontains=search_query))
+
+    if status_filter:
+        users = users.filter(profile__account_status=status_filter)
+
+    return render(
+        request,
+        "printing/admin_users.html",
+        {
+            "users": users,
+            "search_query": search_query,
+            "selected_status": status_filter,
+            "status_choices": Profile.STATUS_CHOICES,
+        },
+    )
+
+
+@chapify_admin_required
+@require_POST
+def admin_user_action(request, user_id):
+    target = get_object_or_404(get_user_model(), pk=user_id)
+    action = USER_ACTIONS.get(request.POST.get("action"))
+
+    if action is None:
+        messages.error(request, "Unknown action.")
+        return redirect("admin_users")
+
+    kind, value, label = action
+
+    try:
+        if kind == "status":
+            services.set_account_status(target, value, request.user)
+        else:
+            services.set_role(target, value, request.user)
+    except services.WorkflowError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, f"{target.username} {label}.")
+
+    return redirect("admin_users")
+
+
+@chapify_admin_required
+def admin_transactions(request):
+    """Payment transaction records (FR-11)."""
+    transactions = (
+        PaymentTransaction.objects
+        .select_related("print_request__user")
+        .order_by("-payment_date", "-id")
+    )
+    search_query = request.GET.get("q", "").strip()
+    status_filter = request.GET.get("status", "").strip()
+
+    if status_filter:
+        transactions = transactions.filter(payment_status=status_filter)
+
+    if search_query:
+        query_filter = (
+            Q(print_request__user__username__icontains=search_query)
+            | Q(gateway_reference__icontains=search_query)
+        )
+        if search_query.isdigit():
+            query_filter |= Q(print_request_id=int(search_query))
+        if services.is_uuid(search_query):
+            query_filter |= Q(reference=search_query)
+        transactions = transactions.filter(query_filter)
+
+    return render(
+        request,
+        "printing/admin_transactions.html",
+        {
+            "transactions": transactions[:200],
+            "confirmed_total": (
+                transactions.filter(payment_status=PaymentTransaction.STATUS_CONFIRMED)
+                .aggregate(total=Sum("amount"))["total"] or 0
+            ),
+            "search_query": search_query,
+            "selected_status": status_filter,
+            "status_choices": PaymentTransaction.STATUS_CHOICES,
+        },
+    )
+
+
+@chapify_admin_required
+def admin_printers(request):
+    """Printer resources: add printers and change their availability."""
+    if request.method == "POST":
+        try:
+            printer = services.add_printer(
+                request.POST.get("printer_name", ""),
+                request.POST.get("location", ""),
+                request.user,
+            )
+        except services.WorkflowError as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(request, f"Printer {printer.printer_name} added.")
+        return redirect("admin_printers")
+
+    printers = Printer.objects.annotate(job_count=Count("printjob")).order_by("printer_name")
+
+    return render(
+        request,
+        "printing/admin_printers.html",
+        {
+            "printers": printers,
+            "manual_statuses": [
+                (value, label) for value, label in Printer.STATUS_CHOICES
+                if value in services.MANUAL_PRINTER_STATUSES
+            ],
+        },
+    )
+
+
+@chapify_admin_required
+@require_POST
+def admin_printer_status(request, printer_id):
+    printer = get_object_or_404(Printer, pk=printer_id)
+
+    try:
+        services.set_printer_status(printer, request.POST.get("printer_status", ""), request.user)
+    except services.WorkflowError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, f"{printer.printer_name} is now {printer.get_printer_status_display()}.")
+
+    return redirect("admin_printers")
+
+
+@chapify_admin_required
+@require_POST
+def admin_retry_print_job(request, job_id):
+    job = get_object_or_404(PrintJob, pk=job_id)
+
+    try:
+        services.retry_print_job(job, request.user)
+    except services.WorkflowError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, f"Print job #{job.id} is back in the queue.")
 
     return redirect("admin_dashboard")
 
