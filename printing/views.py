@@ -120,7 +120,11 @@ def upload_document(request):
         form = DocumentUploadForm(request.POST, request.FILES)
 
         if form.is_valid():
-            document = services.store_uploaded_document(request.user, form.cleaned_data["file"])
+            document = services.store_uploaded_document(
+                request.user,
+                form.cleaned_data["file"],
+                page_count=form.page_count,
+            )
             return redirect("print_settings", document_id=document.id)
     else:
         form = DocumentUploadForm()
@@ -302,7 +306,6 @@ def edit_print_request(request, request_id):
     else:
         form = PrintSettingsForm(
             initial={
-                "document_pages": print_request.document_pages,
                 "copies": print_request.settings.copies,
                 "color_mode": print_request.settings.color_mode,
                 "paper_format": print_request.settings.paper_format,
@@ -496,7 +499,12 @@ def api_create_print_request(request):
         return Response(serializer.errors, status=400)
 
     data = serializer.validated_data
-    document = services.store_uploaded_document(request.user, data["file"], channel="api")
+    document = services.store_uploaded_document(
+        request.user,
+        data["file"],
+        page_count=serializer.page_count,
+        channel="api",
+    )
 
     try:
         print_request = services.create_print_request(

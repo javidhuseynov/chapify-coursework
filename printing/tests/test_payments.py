@@ -199,7 +199,7 @@ class NotificationSecurityTests(ChapifyTestCase):
         # Price changed after checkout started -> old attempt cancelled, cannot complete.
         services.update_print_request(
             self.print_request,
-            services.PrintOptions(1, 1, "BW", "A4", "ONE_SIDED"),
+            services.PrintOptions(1, "BW", "A4", "ONE_SIDED"),
             self.user,
         )
         self.assertEqual(self.post_notification(sign_notification(self.payment)).status_code, 400)

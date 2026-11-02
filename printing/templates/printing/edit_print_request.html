@@ -29,6 +29,12 @@
                     </p>
 
                     <p>
+                        Pages:
+                        <strong>{{ print_request.document_pages }}</strong>
+                        <span class="text-muted small">(counted from the PDF, cannot be changed)</span>
+                    </p>
+
+                    <p>
                         Current price:
                         <strong>{{ print_request.total_price }} EUR</strong>
                     </p>
@@ -78,7 +84,7 @@
                     </p>
 
                     <ol>
-                        <li>Change pages, copies, color mode, paper format, or duplex mode.</li>
+                        <li>Change copies, color mode, paper format, or duplex mode.</li>
                         <li>The system recalculates the total price.</li>
                         <li>After saving, the request returns to the payment step.</li>
                     </ol>

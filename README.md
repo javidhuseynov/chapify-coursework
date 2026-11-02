@@ -20,64 +20,68 @@ is bachelor's-thesis work (`git log coursework-baseline..HEAD`).
 
 ---
 
-## 1. Local setup (Windows 11, PowerShell)
+## 1. Local setup (Windows, Command Prompt)
 
 Requirements: Git and **Python 3.12 or newer** (`python --version`).
+Type each command on its own line.
 
 ### First time only
 
-```powershell
+```bat
 git clone https://github.com/javidhuseynov/chapify-coursework.git
 cd chapify-coursework
 python -m venv venv
-.\venv\Scripts\Activate.ps1
+venv\Scripts\activate.bat
 pip install -r requirements.txt
-Copy-Item .env.example .env        # then edit .env and replace the <placeholders>
+copy .env.example .env
+notepad .env
 python manage.py migrate
-python manage.py createsuperuser   # this account becomes a Chapify administrator
+python manage.py createsuperuser
 ```
 
-If activation is blocked ("running scripts is disabled"), run once:
-`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
-
-`.env` is optional for local development (safe development defaults are used), but required for
-any shared or hosted environment. Never commit it.
+In `.env`, replace each `<placeholder>` with a random value from
+`python -c "import secrets; print(secrets.token_urlsafe(50))"`. `.env` is never committed.
+The account created with `createsuperuser` becomes a Chapify administrator.
 
 ### Every session
 
-```powershell
+```bat
 cd chapify-coursework
-.\venv\Scripts\Activate.ps1
+venv\Scripts\activate.bat
 python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000/ (application) and http://127.0.0.1:8000/admin/ (Django admin).
+The prompt shows `(venv)` when the environment is active. Open http://127.0.0.1:8000/
+(application) and http://127.0.0.1:8000/admin/ (Django admin).
 
-Optional second terminal (activate the venv there too) to process the print queue automatically:
+Optional second cmd window (activate the venv there too) to process the print queue automatically:
 
-```powershell
-python manage.py run_print_simulator              # Ctrl+C to stop
-python manage.py run_print_simulator --fail-rate 0.3   # 30 % of jobs fail
+```bat
+python manage.py run_print_simulator
+python manage.py run_print_simulator --fail-rate 0.3
 ```
+
+(PowerShell users: activate with `.\venv\Scripts\Activate.ps1` and copy with `Copy-Item`.)
 
 ### After pulling new changes
 
-```powershell
-git status                       # must be clean before pulling
+```bat
+git status
 git pull --ff-only
-pip install -r requirements.txt  # only needed if requirements.txt changed
-python manage.py migrate         # applies new database migrations, if any
-python manage.py test            # all tests must pass
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py test
 ```
 
-Do **not** run `makemigrations` during normal setup: migrations are part of the repository.
+`git status` must show no local changes before pulling. Do **not** run `makemigrations` during
+normal setup: migrations are part of the repository.
 
 ---
 
 ## 2. Demonstration walkthrough
 
 1. Register a user (or log in) and choose **New Request**.
-2. Upload a PDF, DOCX or TXT file (max 5 MB), enter the page count and print settings.
+2. Upload a PDF (max 5 MB, not password-protected). The page count is read from the file; choose copies, colour, paper and duplex.
 3. On the payment page press **Pay**. You are sent to the Chapify Pay test checkout.
 4. Choose **Approve payment** (or **Decline** to see the retry path).
 5. Back in Chapify, the request is *Payment confirmed* and the print job is *Queued*.
@@ -101,7 +105,7 @@ AWAITING_PAYMENT --(gateway: APPROVED)--> PAYMENT_CONFIRMED --(printed)--> COMPL
 Print jobs: `QUEUED -> IN_PROGRESS -> COMPLETED | FAILED`. The uploaded file is kept until the
 request reaches `COMPLETED`, `FAILED` or `CANCELLED`, then deleted.
 
-Price (thesis §4.5): `pages x copies x 0.10 EUR x colour (1.0/2.0) x paper (A4 1.0 / A3 1.8) x duplex (1.0/0.9)`,
+Price (thesis §4.5): `pages (counted from the PDF) x copies x 0.10 EUR x colour (1.0/2.0) x paper (A4 1.0 / A3 1.8) x duplex (1.0/0.9)`,
 calculated with exact decimals and rounded half-up to cents (`printing/pricing.py`).
 
 ## 4. Payment security design
@@ -138,19 +142,18 @@ Authentication: session, or token (`Authorization: Token <token>`).
 | GET | `/api/my/requests/<id>/` | One own request |
 | GET | `/api/my/payments/` | Own payment attempts |
 | GET | `/api/my/print-jobs/` | Own print jobs |
-| POST | `/api/requests/create/` | Create a request (multipart: `file`, `document_pages`, `copies`, `color_mode` BW/COLOR, `paper_format` A4/A3, `duplex_mode` ONE_SIDED/DOUBLE_SIDED) |
+| POST | `/api/requests/create/` | Create a request (multipart: `file` (PDF), `copies`, `color_mode` BW/COLOR, `paper_format` A4/A3, `duplex_mode` ONE_SIDED/DOUBLE_SIDED). Pages are counted from the PDF. |
 | POST | `/api/requests/<id>/payment/` | Start a payment; returns `checkout_url` for the payer |
 | POST | `/api/requests/<id>/cancel/` | Cancel an unpaid request |
 | POST | `/payments/callback/` | Gateway webhook (form field or JSON `notification`; no login, signature-verified) |
 | GET | `/api/admin/summary/`, `requests/`, `transactions/`, `print-jobs/`, `printers/`, `audit-logs/` | Administrator only |
 
-PowerShell examples (`curl.exe`, placeholders in `<...>`):
+Command Prompt examples (`curl` is built into Windows; placeholders in `<...>`):
 
-```powershell
-curl.exe -X POST http://127.0.0.1:8000/api/auth/token/ -d "username=<user>" -d "password=<password>"
-curl.exe -H "Authorization: Token <token>" -F "file=@report.pdf" -F "document_pages=2" -F "copies=2" `
-  -F "color_mode=BW" -F "paper_format=A4" -F "duplex_mode=ONE_SIDED" http://127.0.0.1:8000/api/requests/create/
-curl.exe -H "Authorization: Token <token>" -X POST http://127.0.0.1:8000/api/requests/<id>/payment/
+```bat
+curl -X POST http://127.0.0.1:8000/api/auth/token/ -d "username=<user>" -d "password=<password>"
+curl -H "Authorization: Token <token>" -F "file=@report.pdf" -F "copies=2" -F "color_mode=BW" -F "paper_format=A4" -F "duplex_mode=ONE_SIDED" http://127.0.0.1:8000/api/requests/create/
+curl -H "Authorization: Token <token>" -X POST http://127.0.0.1:8000/api/requests/<id>/payment/
 ```
 
 Open the returned `checkout_url` in a browser to approve or decline the payment.
@@ -164,7 +167,7 @@ Open the returned `checkout_url` in a browser to approve or decline the payment.
 
 ## 8. Tests
 
-```powershell
+```bat
 python manage.py test
 ```
 

@@ -49,6 +49,9 @@ class Document(models.Model):
     file_name = models.CharField(max_length=255)
     file_type = models.CharField(max_length=20)
     file_size = models.PositiveIntegerField()
+    # Counted from the PDF at upload time; empty for documents uploaded before
+    # page counting existed (those cannot be used for new requests).
+    page_count = models.PositiveIntegerField(null=True, blank=True)
     upload_time = models.DateTimeField(default=timezone.now)
     validation_status = models.CharField(
         max_length=10,
