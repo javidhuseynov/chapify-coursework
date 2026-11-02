@@ -1,3 +1,4 @@
+import io
 import shutil
 import tempfile
 from urllib.parse import parse_qs, urlsplit
@@ -6,22 +7,35 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
+from pypdf import PdfWriter
 
 from mockgateway import signing
 from printing import services
 from printing.models import PaymentTransaction
+from printing.validators import inspect_uploaded_document
 
 User = get_user_model()
 PASSWORD = "Str0ng-test-pass!"
 
 
-def pdf_file(name="lecture_notes.pdf"):
-    return SimpleUploadedFile(name, b"%PDF-1.4\n% test document\n", content_type="application/pdf")
+def pdf_bytes(pages=10, password=None):
+    """A real PDF with the given number of blank A4 pages."""
+    writer = PdfWriter()
+    for _ in range(pages):
+        writer.add_blank_page(width=595, height=842)
+    if password:
+        writer.encrypt(user_password=password, algorithm="RC4-128")
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+def pdf_file(name="lecture_notes.pdf", pages=10, password=None):
+    return SimpleUploadedFile(name, pdf_bytes(pages, password), content_type="application/pdf")
 
 
 def default_options(**overrides):
     values = {
-        "document_pages": 10,
         "copies": 2,
         "color_mode": "COLOR",
         "paper_format": "A4",
@@ -71,8 +85,9 @@ class ChapifyTestCase(TestCase):
     def make_admin(self, username="admin"):
         return User.objects.create_superuser(username=username, email=f"{username}@example.com", password=PASSWORD)
 
-    def make_document(self, user, name="lecture_notes.pdf"):
-        return services.store_uploaded_document(user, pdf_file(name))
+    def make_document(self, user, name="lecture_notes.pdf", pages=10):
+        uploaded = pdf_file(name, pages)
+        return services.store_uploaded_document(user, uploaded, page_count=inspect_uploaded_document(uploaded))
 
     def make_request(self, user, **option_overrides):
         document = self.make_document(user)

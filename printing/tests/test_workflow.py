@@ -108,6 +108,7 @@ class EditAndCancelTests(ChapifyTestCase):
         self.print_request = self.make_request(self.user)
 
     def test_edit_recalculates_price_and_cancels_open_payment_attempt(self):
+        # The posted "document_pages" is ignored: the PDF has 10 pages.
         attempt = services.initiate_payment(self.print_request, self.user)
 
         response = self.client.post(
@@ -118,7 +119,8 @@ class EditAndCancelTests(ChapifyTestCase):
 
         self.print_request.refresh_from_db()
         attempt.refresh_from_db()
-        self.assertEqual(self.print_request.total_price, Decimal("0.10"))
+        self.assertEqual(self.print_request.document_pages, 10)
+        self.assertEqual(self.print_request.total_price, Decimal("1.00"))
         self.assertEqual(attempt.payment_status, PaymentTransaction.STATUS_CANCELLED)
         self.assertTrue(
             AuditLog.objects.filter(event_type=AuditLog.EVENT_PRINT_REQUEST_UPDATED, print_request=self.print_request).exists()

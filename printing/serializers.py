@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .validators import validate_uploaded_document
+from .validators import DocumentValidationError, inspect_uploaded_document
 
 from .models import (
     AuditLog,
@@ -20,6 +20,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "file_name",
             "file_type",
             "file_size",
+            "page_count",
             "upload_time",
             "validation_status",
         ]
@@ -116,17 +117,18 @@ class AuditLogSerializer(serializers.ModelSerializer):
         ]
 
 class CreatePrintRequestSerializer(serializers.Serializer):
+    """The page count is read from the uploaded PDF; any client-sent value is ignored."""
+
     file = serializers.FileField()
-    document_pages = serializers.IntegerField(min_value=1)
     copies = serializers.IntegerField(min_value=1)
     color_mode = serializers.ChoiceField(choices=PrintSettings.COLOR_CHOICES)
     paper_format = serializers.ChoiceField(choices=PrintSettings.PAPER_CHOICES)
     duplex_mode = serializers.ChoiceField(choices=PrintSettings.DUPLEX_CHOICES)
 
     def validate_file(self, uploaded_file):
-        error_message = validate_uploaded_document(uploaded_file)
-
-        if error_message:
-            raise serializers.ValidationError(error_message)
+        try:
+            self.page_count = inspect_uploaded_document(uploaded_file)
+        except DocumentValidationError as error:
+            raise serializers.ValidationError(str(error))
 
         return uploaded_file

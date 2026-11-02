@@ -1,6 +1,6 @@
 from django import forms
 
-from .validators import validate_uploaded_document
+from .validators import DocumentValidationError, inspect_uploaded_document
 
 from .models import Document, PrintSettings
 
@@ -15,20 +15,18 @@ class DocumentUploadForm(forms.ModelForm):
 
     def clean_file(self):
         uploaded_file = self.cleaned_data.get("file")
-        error_message = validate_uploaded_document(uploaded_file)
 
-        if error_message:
-            raise forms.ValidationError(error_message)
+        try:
+            # The page count is read from the PDF itself and used for pricing.
+            self.page_count = inspect_uploaded_document(uploaded_file)
+        except DocumentValidationError as error:
+            raise forms.ValidationError(str(error))
 
         return uploaded_file
 
 
 class PrintSettingsForm(forms.ModelForm):
-    document_pages = forms.IntegerField(
-        min_value=1,
-        initial=1,
-        label="Number of pages"
-    )
+    # The number of pages is not a form field: it is counted from the PDF.
 
     class Meta:
         model = PrintSettings

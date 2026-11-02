@@ -34,10 +34,10 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Number of pages</label>
-                        {{ form.document_pages }}
-                        {% if form.document_pages.errors %}
-                            <div class="text-danger mt-2">{{ form.document_pages.errors }}</div>
-                        {% endif %}
+                        <div class="form-control-plaintext">
+                            {{ document.page_count }} page{{ document.page_count|pluralize }}
+                            <span class="text-muted small">(counted automatically from the PDF)</span>
+                        </div>
                     </div>
 
                     <div class="mb-3">

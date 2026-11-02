@@ -116,8 +116,8 @@ def _cancel_open_payment_attempts(print_request):
 # Documents and print requests
 # ---------------------------------------------------------------------------
 
-def store_uploaded_document(user, uploaded_file, channel="web"):
-    """Save an already validated upload and record it in the audit log."""
+def store_uploaded_document(user, uploaded_file, page_count, channel="web"):
+    """Save an already validated upload (with its counted pages) and audit it."""
     extension = os.path.splitext(uploaded_file.name)[1].lower().lstrip(".")
     original_name = os.path.basename(uploaded_file.name)
 
@@ -128,6 +128,7 @@ def store_uploaded_document(user, uploaded_file, channel="web"):
             file_name=original_name,
             file_type=extension,
             file_size=uploaded_file.size,
+            page_count=page_count,
             validation_status=Document.STATUS_VALID,
         )
         # Record the name the storage actually used (it may add a suffix).
@@ -142,7 +143,7 @@ def store_uploaded_document(user, uploaded_file, channel="web"):
         )
         audit(
             AuditLog.EVENT_DOCUMENT_VALIDATED,
-            f"{label} passed type and size validation: {document.file_name}.",
+            f"{label} passed validation: {document.file_name} is a readable PDF with {page_count} page(s).",
             user=user,
         )
 
@@ -160,10 +161,17 @@ def ensure_document_can_be_used(document):
             "The uploaded file is no longer available. Please upload the document again."
         )
 
+    if not document.page_count:
+        raise WorkflowError(
+            "The number of pages of this document is unknown. Please upload the document again."
+        )
+
 
 @dataclass
 class PrintOptions:
-    document_pages: int
+    """Settings chosen by the user. The page count is NOT one of them: it comes
+    from the uploaded PDF (Document.page_count)."""
+
     copies: int
     color_mode: str
     paper_format: str
@@ -172,7 +180,6 @@ class PrintOptions:
     @classmethod
     def from_cleaned_data(cls, data):
         return cls(
-            document_pages=data["document_pages"],
             copies=data["copies"],
             color_mode=data["color_mode"],
             paper_format=data["paper_format"],
@@ -197,7 +204,7 @@ def create_print_request(user, document, options, channel="web"):
             user=user,
             document=document,
             settings=print_settings,
-            document_pages=options.document_pages,
+            document_pages=document.page_count,
             status=PrintRequest.STATUS_AWAITING_PAYMENT,
         )
         print_request.calculate_price()
@@ -230,7 +237,6 @@ def update_print_request(print_request, options, user):
         print_settings.paper_format = options.paper_format
         print_settings.duplex_mode = options.duplex_mode
 
-        print_request.document_pages = options.document_pages
         new_total = print_request.calculate_price()
 
         # Conditional update: refuse if a payment confirmed the request meanwhile.
@@ -238,7 +244,6 @@ def update_print_request(print_request, options, user):
             pk=print_request.pk,
             status__in=PrintRequest.OPEN_STATUSES,
         ).update(
-            document_pages=options.document_pages,
             total_price=new_total,
             updated_at=timezone.now(),
         )
@@ -253,7 +258,7 @@ def update_print_request(print_request, options, user):
         audit(
             AuditLog.EVENT_PRINT_REQUEST_UPDATED,
             (
-                f"User updated print request #{print_request.pk}. New pages: {options.document_pages}, "
+                f"User updated print request #{print_request.pk}. Pages: {print_request.document_pages}, "
                 f"copies: {options.copies}, total price: {new_total} EUR."
             ),
             user=user,
