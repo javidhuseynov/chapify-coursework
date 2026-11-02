@@ -12,21 +12,30 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
+from .env import env_bool, env_int, env_list, env_str, load_env_file
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Optional local configuration file (never committed). See .env.example.
+load_env_file(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-7b%46678qt3e^ul!-qqyymo84t%o0q05&4)83rw-z)mq(gk^e*'
+# The fallback key is for local development only. Set CHAPIFY_SECRET_KEY in .env
+# for any shared or hosted environment.
+SECRET_KEY = env_str(
+    "CHAPIFY_SECRET_KEY",
+    "django-insecure-local-development-key-change-me",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool("CHAPIFY_DEBUG", True)
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = env_list("CHAPIFY_ALLOWED_HOSTS", ["127.0.0.1", "localhost"])
 
 # Application definition
 
@@ -37,7 +46,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    'rest_framework',
+    'rest_framework.authtoken',
     'printing',
+    'mockgateway',
 ]
 
 MIDDLEWARE = [
@@ -62,6 +75,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'printing.context_processors.chapify_roles',
             ],
         },
     },
@@ -77,6 +91,12 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            # Start write transactions immediately so concurrent workflow
+            # updates are serialised instead of failing with "database is locked".
+            'transaction_mode': 'IMMEDIATE',
+            'timeout': 20,
+        },
     }
 }
 
@@ -120,3 +140,35 @@ STATIC_URL = 'static/'
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"
 LOGOUT_REDIRECT_URL = "home"
+
+
+REST_FRAMEWORK = {
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+}
+
+
+# Uploaded documents. Stored outside any web-served folder; Chapify never
+# exposes them through a URL.
+MEDIA_ROOT = BASE_DIR / "private_media"
+
+# Documents of requests that are abandoned (never paid) are removed after this
+# many hours by "python manage.py cleanup_documents".
+DOCUMENT_RETENTION_HOURS = env_int("CHAPIFY_DOCUMENT_RETENTION_HOURS", 24)
+
+
+# Payment gateway (simulated external gateway, see the mockgateway app).
+# The shared secret is used to sign checkout sessions and to verify payment
+# notifications (HMAC-SHA256). Set your own value in .env.
+PAYMENT_GATEWAY_SECRET = env_str(
+    "CHAPIFY_PAYMENT_GATEWAY_SECRET",
+    "local-development-gateway-secret-change-me",
+)
+PAYMENT_CURRENCY = "EUR"
+PAYMENT_SESSION_MAX_AGE_SECONDS = 30 * 60
+PAYMENT_NOTIFICATION_MAX_AGE_SECONDS = 15 * 60

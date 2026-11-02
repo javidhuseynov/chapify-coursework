@@ -3,49 +3,85 @@
 {% block title %}Admin Dashboard - Chapify{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">Administrator dashboard</h2>
+<p>
+    <a href="{% url 'admin_report' %}">Open Administrative Report</a>
+</p>
+
+<h2>Search and Filter Requests</h2>
+
+<form method="get">
+    <label for="q">Search by request ID, username, or document name:</label>
+    <input type="text" id="q" name="q" value="{{ search_query }}">
+
+    <label for="status">Status:</label>
+    <select id="status" name="status">
+        <option value="">All statuses</option>
+        {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>
+                {{ label }}
+            </option>
+        {% endfor %}
+    </select>
+
+    <button type="submit">Apply</button>
+    <a href="{% url 'admin_dashboard' %}">Clear</a>
+</form>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1">Administrator Dashboard</h2>
+        <p class="text-muted mb-0">
+            Monitoring overview for print requests, payments, print jobs, and audit events.
+        </p>
+    </div>
+
+    <div>
+        {% if user.is_staff %}<a href="/admin/" class="btn btn-dark">Open Django Admin</a>{% endif %}
+        <a href="/" class="btn btn-outline-secondary">Back to home</a>
+    </div>
+</div>
 
 <div class="row mb-4">
-    <div class="col-md-2">
-        <div class="card shadow-sm text-center">
+    <div class="col-md-2 col-sm-6 mb-3">
+        <div class="card shadow-sm text-center h-100">
             <div class="card-body">
-                <h4>{{ total_requests }}</h4>
+                <h3 class="fw-bold">{{ total_requests }}</h3>
                 <p class="text-muted mb-0">Print requests</p>
             </div>
         </div>
     </div>
 
-    <div class="col-md-2">
-        <div class="card shadow-sm text-center">
+    <div class="col-md-2 col-sm-6 mb-3">
+        <div class="card shadow-sm text-center h-100">
             <div class="card-body">
-                <h4>{{ confirmed_payments }}</h4>
+                <h3 class="fw-bold text-success">{{ confirmed_payments }}</h3>
                 <p class="text-muted mb-0">Confirmed payments</p>
             </div>
         </div>
     </div>
 
-    <div class="col-md-2">
-        <div class="card shadow-sm text-center">
+    <div class="col-md-2 col-sm-6 mb-3">
+        <div class="card shadow-sm text-center h-100">
             <div class="card-body">
-                <h4>{{ rejected_payments }}</h4>
+                <h3 class="fw-bold text-danger">{{ rejected_payments }}</h3>
                 <p class="text-muted mb-0">Rejected payments</p>
             </div>
         </div>
     </div>
 
-    <div class="col-md-2">
-        <div class="card shadow-sm text-center">
+    <div class="col-md-2 col-sm-6 mb-3">
+        <div class="card shadow-sm text-center h-100">
             <div class="card-body">
-                <h4>{{ completed_jobs }}</h4>
+                <h3 class="fw-bold text-primary">{{ completed_jobs }}</h3>
                 <p class="text-muted mb-0">Completed jobs</p>
             </div>
         </div>
     </div>
 
-    <div class="col-md-2">
-        <div class="card shadow-sm text-center">
+    <div class="col-md-2 col-sm-6 mb-3">
+        <div class="card shadow-sm text-center h-100">
             <div class="card-body">
-                <h4>{{ failed_jobs }}</h4>
+                <h3 class="fw-bold text-warning">{{ failed_jobs }}</h3>
                 <p class="text-muted mb-0">Failed jobs</p>
             </div>
         </div>
@@ -53,79 +89,205 @@
 </div>
 
 <div class="card shadow-sm mb-4">
-    <div class="card-body">
-        <h4 class="mb-3">Recent print requests</h4>
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Print Queue (simulated print server)</h5>
+        <span class="badge bg-light text-dark">{{ queued_jobs }} queued</span>
+    </div>
 
+    <div class="card-body">
+        <form method="post" action="{% url 'admin_process_print_job' %}" class="d-flex flex-wrap gap-3 align-items-center mb-3">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-dark">Process next print job</button>
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="simulate_failure" value="1" id="simulate_failure">
+                <label class="form-check-label" for="simulate_failure">Simulate printer failure</label>
+            </div>
+            <span class="text-muted small">
+                Or run <code>python manage.py run_print_simulator</code> to process the queue continuously.
+            </span>
+        </form>
+
+        <div class="row">
+            <div class="col-lg-8">
+                <h6>Active jobs</h6>
+                {% if active_jobs %}
+                    <table class="table table-sm table-bordered align-middle">
+                        <thead class="table-light">
+                            <tr><th>Job</th><th>Request</th><th>User</th><th>Status</th><th>Printer</th><th>Queued at</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for job in active_jobs %}
+                            <tr>
+                                <td>#{{ job.id }}</td>
+                                <td>#{{ job.print_request_id }}</td>
+                                <td>{{ job.print_request.user.username }}</td>
+                                <td><span class="badge bg-warning text-dark">{{ job.get_job_status_display }}</span></td>
+                                <td>{{ job.printer|default:"(waiting for printer)" }}</td>
+                                <td>{{ job.created_at }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="text-muted">The print queue is empty.</p>
+                {% endif %}
+
+                <h6 class="mt-3">Recently failed jobs</h6>
+                {% if failed_job_list %}
+                    <table class="table table-sm table-bordered align-middle">
+                        <thead class="table-light">
+                            <tr><th>Job</th><th>Request</th><th>User</th><th>Printer</th><th>Reason</th><th>Failed at</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for job in failed_job_list %}
+                            <tr>
+                                <td>#{{ job.id }}</td>
+                                <td>#{{ job.print_request_id }}</td>
+                                <td>{{ job.print_request.user.username }}</td>
+                                <td>{{ job.printer|default:"-" }}</td>
+                                <td>{{ job.failure_reason }}</td>
+                                <td>{{ job.completed_at }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="text-muted">No failed jobs.</p>
+                {% endif %}
+            </div>
+
+            <div class="col-lg-4">
+                <h6>Printers</h6>
+                {% if printers %}
+                    <ul class="list-group">
+                        {% for printer in printers %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>{{ printer.printer_name }}<br><small class="text-muted">{{ printer.location }}</small></span>
+                            {% if printer.printer_status == "AVAILABLE" %}
+                                <span class="badge bg-success">{{ printer.get_printer_status_display }}</span>
+                            {% elif printer.printer_status == "BUSY" %}
+                                <span class="badge bg-warning text-dark">{{ printer.get_printer_status_display }}</span>
+                            {% else %}
+                                <span class="badge bg-danger">{{ printer.get_printer_status_display }}</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">No printers configured. Add one in the Django admin (Printers).</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-dark text-white">
+        <h5 class="mb-0">Recent Print Requests</h5>
+    </div>
+
+    <div class="card-body">
         {% if recent_requests %}
-            <table class="table table-bordered table-hover">
-                <thead class="table-dark">
-                    <tr>
-                        <th>ID</th>
-                        <th>User</th>
-                        <th>Document</th>
-                        <th>Status</th>
-                        <th>Total price</th>
-                        <th>Created at</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in recent_requests %}
-                    <tr>
-                        <td>#{{ item.id }}</td>
-                        <td>{{ item.user.username }}</td>
-                        <td>{{ item.document.file_name }}</td>
-                        <td>{{ item.get_status_display }}</td>
-                        <td>{{ item.total_price }} EUR</td>
-                        <td>{{ item.created_at }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>User</th>
+                            <th>Document</th>
+                            <th>Status</th>
+                            <th>Total price</th>
+                            <th>Created at</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in recent_requests %}
+                        <tr>
+                            <td>#{{ item.id }}</td>
+                            <td>{{ item.user.username }}</td>
+                            <td>{{ item.document.file_name }}</td>
+                            <td>
+                                {% if item.status == "PAYMENT_CONFIRMED" or item.status == "COMPLETED" %}
+                                    <span class="badge bg-success">{{ item.get_status_display }}</span>
+                                {% elif item.status == "PAYMENT_REJECTED" or item.status == "FAILED" %}
+                                    <span class="badge bg-danger">{{ item.get_status_display }}</span>
+                                {% elif item.status == "AWAITING_PAYMENT" %}
+                                    <span class="badge bg-warning text-dark">{{ item.get_status_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ item.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.total_price }} EUR</td>
+                            <td>{{ item.created_at }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         {% else %}
-            <p class="text-muted">No print requests found.</p>
+            <p class="text-muted mb-0">No print requests found.</p>
         {% endif %}
     </div>
 </div>
 
 <div class="card shadow-sm">
-    <div class="card-body">
-        <h4 class="mb-3">Recent audit logs</h4>
+    <div class="card-header bg-dark text-white">
+        <h5 class="mb-0">Recent Audit Logs</h5>
+    </div>
 
+    <div class="card-body">
         {% if recent_logs %}
-            <table class="table table-bordered table-hover">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Event type</th>
-                        <th>User</th>
-                        <th>Description</th>
-                        <th>Timestamp</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for log in recent_logs %}
-                    <tr>
-                        <td>{{ log.get_event_type_display }}</td>
-                        <td>
-                            {% if log.user %}
-                                {{ log.user.username }}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        <td>{{ log.description }}</td>
-                        <td>{{ log.event_timestamp }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Event type</th>
+                            <th>User</th>
+                            <th>Print request</th>
+                            <th>Description</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in recent_logs %}
+                        <tr>
+                            <td>
+                                {% if "PAYMENT_CONFIRMED" in log.event_type or "PRINT_JOB_CREATED" in log.event_type %}
+                                    <span class="badge bg-success">{{ log.get_event_type_display }}</span>
+                                {% elif "PAYMENT_REJECTED" in log.event_type %}
+                                    <span class="badge bg-danger">{{ log.get_event_type_display }}</span>
+                                {% elif "DOCUMENT" in log.event_type %}
+                                    <span class="badge bg-info text-dark">{{ log.get_event_type_display }}</span>
+                                {% elif "PRINT_REQUEST_CREATED" in log.event_type %}
+                                    <span class="badge bg-primary">{{ log.get_event_type_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ log.get_event_type_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.user %}
+                                    {{ log.user.username }}
+                                {% else %}
+                                    System
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.print_request %}
+                                    #{{ log.print_request.id }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>{{ log.description }}</td>
+                            <td>{{ log.event_timestamp }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         {% else %}
-            <p class="text-muted">No audit logs found.</p>
+            <p class="text-muted mb-0">No audit logs found.</p>
         {% endif %}
     </div>
-</div>
-
-<div class="mt-4">
-    <a href="/admin/" class="btn btn-dark">Open Django Admin</a>
-    <a href="/" class="btn btn-outline-secondary">Back to home</a>
 </div>
 {% endblock %}

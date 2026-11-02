@@ -1,5 +1,7 @@
 from django import forms
 
+from .validators import validate_uploaded_document
+
 from .models import Document, PrintSettings
 
 from django.contrib.auth.forms import UserCreationForm
@@ -13,20 +15,10 @@ class DocumentUploadForm(forms.ModelForm):
 
     def clean_file(self):
         uploaded_file = self.cleaned_data.get("file")
+        error_message = validate_uploaded_document(uploaded_file)
 
-        if not uploaded_file:
-            raise forms.ValidationError("Document file is required.")
-
-        allowed_extensions = [".pdf", ".docx", ".txt"]
-        file_name = uploaded_file.name.lower()
-
-        if not any(file_name.endswith(ext) for ext in allowed_extensions):
-            raise forms.ValidationError("Only PDF, DOCX, and TXT files are allowed.")
-
-        max_size = 5 * 1024 * 1024
-
-        if uploaded_file.size > max_size:
-            raise forms.ValidationError("File size must not exceed 5 MB.")
+        if error_message:
+            raise forms.ValidationError(error_message)
 
         return uploaded_file
 

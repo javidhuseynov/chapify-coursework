@@ -3,28 +3,85 @@
 {% block title %}Upload Document - Chapify{% endblock %}
 
 {% block content %}
-<div class="card shadow-sm">
-    <div class="card-body">
-        <h2 class="mb-3">Upload document</h2>
-
-        <p class="text-muted">
-            Select a document for printing. Allowed formats: PDF, DOCX, TXT. Maximum size: 5 MB.
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1">Upload Document</h2>
+        <p class="text-muted mb-0">
+            Start a new print request by uploading a document for validation.
         </p>
+    </div>
 
-        <form method="post" enctype="multipart/form-data">
-            {% csrf_token %}
+    <div>
+        <a href="/" class="btn btn-outline-secondary">Back to home</a>
+    </div>
+</div>
 
-            <div class="mb-3">
-                {{ form.file.label_tag }}
-                {{ form.file }}
-                {% if form.file.errors %}
-                    <div class="text-danger">{{ form.file.errors }}</div>
-                {% endif %}
+<div class="row">
+    <div class="col-md-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Document Upload</h5>
             </div>
 
-            <button type="submit" class="btn btn-dark">Continue</button>
-            <a href="/" class="btn btn-outline-secondary">Cancel</a>
-        </form>
+            <div class="card-body">
+                <p class="text-muted">
+                    Select a document for printing. The system will validate the uploaded file before print settings are selected.
+                </p>
+
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Document file</label>
+                        {{ form.file }}
+
+                        {% if form.file.errors %}
+                            <div class="text-danger mt-2">
+                                {{ form.file.errors }}
+                            </div>
+                        {% endif %}
+
+                        <div class="form-text">
+                            Allowed formats: PDF, DOCX, TXT. Maximum size: 5 MB.
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-dark">Continue to print settings</button>
+                    <a href="/" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Workflow Step 1 of 3</h5>
+            </div>
+
+            <div class="card-body">
+                <p class="mb-2">
+                    <strong>1. Upload document</strong>
+                </p>
+                <p class="text-muted">
+                    The file is temporarily stored and checked before printing.
+                </p>
+
+                <p class="mb-2">
+                    <strong>2. Select print settings</strong>
+                </p>
+                <p class="text-muted">
+                    Choose copies, paper format, color mode, and duplex mode.
+                </p>
+
+                <p class="mb-2">
+                    <strong>3. Pay</strong>
+                </p>
+                <p class="text-muted mb-0">
+                    After the payment gateway confirms the payment, a print job is queued.
+                </p>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

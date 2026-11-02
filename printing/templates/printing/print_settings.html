@@ -3,44 +3,111 @@
 {% block title %}Print Settings - Chapify{% endblock %}
 
 {% block content %}
-<div class="card shadow-sm">
-    <div class="card-body">
-        <h2 class="mb-3">Print settings</h2>
-
-        <p class="text-muted">
-            Document: <strong>{{ document.file_name }}</strong>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1">Print Settings</h2>
+        <p class="text-muted mb-0">
+            Select printing parameters and continue to automatic price calculation.
         </p>
+    </div>
 
-        <form method="post">
-            {% csrf_token %}
+    <div>
+        <a href="{% url 'upload_document' %}" class="btn btn-outline-secondary">Back to upload</a>
+    </div>
+</div>
 
-            <div class="mb-3">
-                {{ form.document_pages.label_tag }}
-                {{ form.document_pages }}
+<div class="row">
+    <div class="col-md-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Print Configuration</h5>
             </div>
 
-            <div class="mb-3">
-                {{ form.copies.label_tag }}
-                {{ form.copies }}
+            <div class="card-body">
+                <div class="alert alert-light border">
+                    Document:
+                    <strong>{{ document.file_name }}</strong>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Number of pages</label>
+                        {{ form.document_pages }}
+                        {% if form.document_pages.errors %}
+                            <div class="text-danger mt-2">{{ form.document_pages.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Number of copies</label>
+                        {{ form.copies }}
+                        {% if form.copies.errors %}
+                            <div class="text-danger mt-2">{{ form.copies.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Color mode</label>
+                        {{ form.color_mode }}
+                        {% if form.color_mode.errors %}
+                            <div class="text-danger mt-2">{{ form.color_mode.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Paper format</label>
+                        {{ form.paper_format }}
+                        {% if form.paper_format.errors %}
+                            <div class="text-danger mt-2">{{ form.paper_format.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Duplex mode</label>
+                        {{ form.duplex_mode }}
+                        {% if form.duplex_mode.errors %}
+                            <div class="text-danger mt-2">{{ form.duplex_mode.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <button type="submit" class="btn btn-dark">Calculate price and continue</button>
+                    <a href="/" class="btn btn-outline-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Workflow Step 2 of 3</h5>
             </div>
 
-            <div class="mb-3">
-                {{ form.color_mode.label_tag }}
-                {{ form.color_mode }}
-            </div>
+            <div class="card-body">
+                <p class="mb-2">
+                    <strong>1. Upload document</strong>
+                </p>
+                <p class="text-muted">
+                    The document has been uploaded and validated.
+                </p>
 
-            <div class="mb-3">
-                {{ form.paper_format.label_tag }}
-                {{ form.paper_format }}
-            </div>
+                <p class="mb-2">
+                    <strong>2. Select print settings</strong>
+                </p>
+                <p class="text-muted">
+                    The selected values are used to calculate the total price.
+                </p>
 
-            <div class="mb-3">
-                {{ form.duplex_mode.label_tag }}
-                {{ form.duplex_mode }}
+                <p class="mb-2">
+                    <strong>3. Pay</strong>
+                </p>
+                <p class="text-muted mb-0">
+                    A print job is queued only after the payment gateway confirms the payment.
+                </p>
             </div>
-
-            <button type="submit" class="btn btn-dark">Calculate price and continue</button>
-        </form>
+        </div>
     </div>
 </div>
 {% endblock %}
