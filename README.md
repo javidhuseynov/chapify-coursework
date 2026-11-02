@@ -1,200 +1,189 @@
-## API Testing Documentation
+# Chapify
 
-This section describes the tested REST API endpoints of the Chapify prototype.
-The API was tested using `curl` commands from PowerShell.
+Self-service printing information system with integrated micro-payment functionality
+(bachelor's thesis project, Vilnius University Kaunas Faculty).
 
-### 1. Obtain Authentication Token
+A user uploads a document, chooses print settings, sees the calculated price, pays through a
+payment gateway and follows the print job until it is printed. Administrators monitor the
+print queue, payments, printers and the audit log.
 
-Endpoint:
+- **Payment:** a simulated external gateway ("Chapify Pay - test mode", `mockgateway` app).
+  Chapify only accepts payment results that carry the gateway's valid HMAC-SHA256 signature.
+- **Printing:** a simulated print server (queue + `run_print_simulator` command, or a button on
+  the admin dashboard). No physical printer is needed.
+- **Stack:** Python 3.12+, Django 6.0, Django REST Framework, SQLite, Bootstrap 5.
 
-```http
-POST /api/auth/token/
-```
-
-Example request:
-
-```bash
-curl.exe -X POST http://127.0.0.1:8000/api/auth/token/ ^
-  -d "username=testuser" ^
-  -d "password=testpassword"
-```
-
-Example response:
-
-```json
-{
-  "token": "YOUR_TOKEN_HERE"
-}
-```
-
-The returned token must be used in the `Authorization` header for protected API requests.
+The course-work version of June 2026 is tagged `coursework-baseline`; everything after that tag
+is bachelor's-thesis work (`git log coursework-baseline..HEAD`).
 
 ---
 
-### 2. View Current User Print Requests
+## 1. Local setup (Windows 11, PowerShell)
 
-Endpoint:
+Requirements: Git and **Python 3.12 or newer** (`python --version`).
 
-```http
-GET /api/my/requests/
+### First time only
+
+```powershell
+git clone https://github.com/javidhuseynov/chapify-coursework.git
+cd chapify-coursework
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env        # then edit .env and replace the <placeholders>
+python manage.py migrate
+python manage.py createsuperuser   # this account becomes a Chapify administrator
 ```
 
-Example request:
+If activation is blocked ("running scripts is disabled"), run once:
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
-```bash
-curl.exe -H "Authorization: Token YOUR_TOKEN_HERE" ^
-  http://127.0.0.1:8000/api/my/requests/
+`.env` is optional for local development (safe development defaults are used), but required for
+any shared or hosted environment. Never commit it.
+
+### Every session
+
+```powershell
+cd chapify-coursework
+.\venv\Scripts\Activate.ps1
+python manage.py runserver
 ```
 
-Example response:
+Open http://127.0.0.1:8000/ (application) and http://127.0.0.1:8000/admin/ (Django admin).
 
-```json
-[
-  {
-    "id": 10,
-    "document": {
-      "id": 10,
-      "file_name": "test.txt",
-      "file_type": "txt",
-      "file_size": 26,
-      "validation_status": "VALID"
-    },
-    "settings": {
-      "copies": 2,
-      "color_mode": "COLOR",
-      "paper_format": "A4",
-      "duplex_mode": true
-    },
-    "total_price": "0.40",
-    "status": "PENDING_PAYMENT"
-  }
-]
+Optional second terminal (activate the venv there too) to process the print queue automatically:
+
+```powershell
+python manage.py run_print_simulator              # Ctrl+C to stop
+python manage.py run_print_simulator --fail-rate 0.3   # 30 % of jobs fail
 ```
 
-This endpoint allows an authenticated user to view their own submitted print requests.
+### After pulling new changes
+
+```powershell
+git status                       # must be clean before pulling
+git pull --ff-only
+pip install -r requirements.txt  # only needed if requirements.txt changed
+python manage.py migrate         # applies new database migrations, if any
+python manage.py test            # all tests must pass
+```
+
+Do **not** run `makemigrations` during normal setup: migrations are part of the repository.
 
 ---
 
-### 3. Create a New Print Request with File Upload
+## 2. Demonstration walkthrough
 
-Endpoint:
+1. Register a user (or log in) and choose **New Request**.
+2. Upload a PDF, DOCX or TXT file (max 5 MB), enter the page count and print settings.
+3. On the payment page press **Pay**. You are sent to the Chapify Pay test checkout.
+4. Choose **Approve payment** (or **Decline** to see the retry path).
+5. Back in Chapify, the request is *Payment confirmed* and the print job is *Queued*.
+6. Log in as the administrator, open **Admin Dashboard** and press **Process next print job**
+   (tick *Simulate printer failure* to demonstrate a failed job), or run `run_print_simulator`.
+7. The user's request becomes *Completed* (or *Failed*); the uploaded file has been deleted.
+8. The audit log (dashboard, report page, Django admin) shows every step.
 
-```http
-POST /api/requests/create/
+## 3. Request lifecycle
+
+```
+AWAITING_PAYMENT --(gateway: APPROVED)--> PAYMENT_CONFIRMED --(printed)--> COMPLETED
+       |   ^                                        |
+       |   |(user retries payment)                  +--(printer error)--> FAILED
+       |   |
+       +--(gateway: DECLINED)--> PAYMENT_REJECTED
+       |                               |
+       +-------(user cancels / not paid within retention period)------> CANCELLED
 ```
 
-Example request:
+Print jobs: `QUEUED -> IN_PROGRESS -> COMPLETED | FAILED`. The uploaded file is kept until the
+request reaches `COMPLETED`, `FAILED` or `CANCELLED`, then deleted.
 
-```bash
-curl.exe -H "Authorization: Token YOUR_TOKEN_HERE" ^
-  -X POST http://127.0.0.1:8000/api/requests/create/ ^
-  -F "document=@test.txt" ^
-  -F "copies=2" ^
-  -F "color_mode=COLOR" ^
-  -F "paper_format=A4" ^
-  -F "duplex_mode=true"
+Price (thesis §4.5): `pages x copies x 0.10 EUR x colour (1.0/2.0) x paper (A4 1.0 / A3 1.8) x duplex (1.0/0.9)`,
+calculated with exact decimals and rounded half-up to cents (`printing/pricing.py`).
+
+## 4. Payment security design
+
+1. When the user presses **Pay**, Chapify creates a `PaymentTransaction` (status `INITIATED`,
+   unique UUID `reference`) and redirects to the gateway with a **signed checkout session**
+   (reference, amount, currency, return URL). Changing the amount in the URL breaks the signature.
+2. The gateway returns a **signed notification** (reference, amount, currency, APPROVED/DECLINED,
+   gateway transaction id). It is delivered to `/payments/return/` (browser) and can also be
+   delivered server-to-server to `/payments/callback/` (webhook).
+3. Chapify accepts the notification only if: the signature is valid, it is at most 15 minutes old,
+   the reference exists and is still `INITIATED`, and amount and currency match.
+4. Status changes are atomic conditional updates; a replayed notification is recognised as a
+   duplicate; a database constraint allows at most one confirmed payment per request.
+5. Refused notifications are written to the audit log (`PAYMENT_NOTIFICATION_REFUSED`).
+
+No endpoint lets a user confirm a payment. Chapify never sees card data.
+
+## 5. Roles
+
+- **User**: own requests only (other users' requests return HTTP 404).
+- **Administrator**: `Profile.role = ADMIN`. Accounts created with `createsuperuser` get this role
+  automatically; others can be promoted in Django admin -> Profiles. Used for the admin pages and
+  the `/api/admin/*` endpoints. (The Django admin site itself also needs Django's *staff status*.)
+
+## 6. REST API
+
+Authentication: session, or token (`Authorization: Token <token>`).
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/auth/token/` | Get a token (`username`, `password`) |
+| GET | `/api/my/requests/` | Own print requests (`?status=`, `?q=`) |
+| GET | `/api/my/requests/<id>/` | One own request |
+| GET | `/api/my/payments/` | Own payment attempts |
+| GET | `/api/my/print-jobs/` | Own print jobs |
+| POST | `/api/requests/create/` | Create a request (multipart: `file`, `document_pages`, `copies`, `color_mode` BW/COLOR, `paper_format` A4/A3, `duplex_mode` ONE_SIDED/DOUBLE_SIDED) |
+| POST | `/api/requests/<id>/payment/` | Start a payment; returns `checkout_url` for the payer |
+| POST | `/api/requests/<id>/cancel/` | Cancel an unpaid request |
+| POST | `/payments/callback/` | Gateway webhook (form field or JSON `notification`; no login, signature-verified) |
+| GET | `/api/admin/summary/`, `requests/`, `transactions/`, `print-jobs/`, `printers/`, `audit-logs/` | Administrator only |
+
+PowerShell examples (`curl.exe`, placeholders in `<...>`):
+
+```powershell
+curl.exe -X POST http://127.0.0.1:8000/api/auth/token/ -d "username=<user>" -d "password=<password>"
+curl.exe -H "Authorization: Token <token>" -F "file=@report.pdf" -F "document_pages=2" -F "copies=2" `
+  -F "color_mode=BW" -F "paper_format=A4" -F "duplex_mode=ONE_SIDED" http://127.0.0.1:8000/api/requests/create/
+curl.exe -H "Authorization: Token <token>" -X POST http://127.0.0.1:8000/api/requests/<id>/payment/
 ```
 
-Example response:
+Open the returned `checkout_url` in a browser to approve or decline the payment.
 
-```json
-{
-  "message": "Print request created successfully.",
-  "request_id": 10,
-  "document_status": "VALID",
-  "payment_status": "PENDING",
-  "print_request_status": "PENDING_PAYMENT"
-}
+## 7. Management commands
+
+| Command | Purpose |
+|---|---|
+| `python manage.py run_print_simulator [--once] [--fail-rate 0.2] [--seconds-per-page 0.5]` | Simulated print server |
+| `python manage.py cleanup_documents [--hours 24] [--dry-run]` | Retention policy: expire unpaid requests, delete abandoned uploads |
+
+## 8. Tests
+
+```powershell
+python manage.py test
 ```
 
-This endpoint creates a new print request, validates the uploaded document, stores the selected print settings, calculates the price, and prepares the request for payment.
+Test modules (`printing/tests/`): pricing and signatures, workflow rules, payment security
+(tampering, replay, amount mismatch, expiry, no self-confirmation), print queue and retention,
+access control (IDOR, authentication, administrator RBAC).
 
----
+## 9. Project structure
 
-### 4. Confirm Payment for a Print Request
-
-Endpoint:
-
-```http
-POST /api/requests/<request_id>/payment/confirm/
 ```
-
-Example request:
-
-```bash
-curl.exe -H "Authorization: Token YOUR_TOKEN_HERE" ^
-  -X POST http://127.0.0.1:8000/api/requests/10/payment/confirm/
-```
-
-Example response:
-
-```json
-{
-  "message": "Payment confirmed and print job created.",
-  "payment_id": 9,
-  "payment_status": "CONFIRMED",
-  "print_job_id": 5,
-  "print_job_status": "COMPLETED"
-}
-```
-
-This endpoint simulates successful payment confirmation. After confirmation, the system creates a print job and updates its status.
-
----
-
-### 5. Reject Payment for a Print Request
-
-Endpoint:
-
-```http
-POST /api/requests/<request_id>/payment/reject/
-```
-
-Example request:
-
-```bash
-curl.exe -H "Authorization: Token YOUR_TOKEN_HERE" ^
-  -X POST http://127.0.0.1:8000/api/requests/10/payment/reject/
-```
-
-Example response:
-
-```json
-{
-  "message": "Payment rejected.",
-  "payment_status": "REJECTED",
-  "print_request_status": "PAYMENT_FAILED"
-}
-```
-
-This endpoint simulates rejected payment. In this case, the print job is not created.
-
----
-
-## Tested Workflow
-
-The following workflow was successfully tested:
-
-1. User obtains an API token.
-2. User accesses their own print requests using token authentication.
-3. User uploads a document and creates a print request.
-4. The system validates the uploaded file.
-5. The system stores print settings and calculates the price.
-6. The user confirms payment through the payment simulation endpoint.
-7. The system creates a print job after successful payment.
-8. The print job status is updated successfully.
-
-This confirms that the main Chapify API workflow is functional:
-
-```text
-Login → Token Authentication → File Upload → Print Settings → Price Calculation → Payment Confirmation → Print Job Creation
-```
-
-## Security Note
-
-Real authentication tokens must never be committed to GitHub or included in public documentation.
-All examples in this documentation use the placeholder value:
-
-```text
-YOUR_TOKEN_HERE
+chapify/            settings (env-driven), root URLs, .env loader
+printing/           Chapify application
+  models.py         data model
+  pricing.py        price formula (Decimal)
+  services.py       workflow rules: status transitions, payments, print jobs, retention
+  payments.py       Chapify side of the gateway integration (checkout session, notification check)
+  permissions.py    administrator rule (RBAC)
+  views.py          web pages and REST API
+  management/       run_print_simulator, cleanup_documents
+  tests/            automated tests
+mockgateway/        simulated external payment gateway (test-mode checkout page)
+  signing.py        signed message format (HMAC-SHA256), shared with Chapify
+private_media/      uploaded documents (git-ignored, never served over HTTP)
 ```

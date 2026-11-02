@@ -30,7 +30,7 @@
                         name="q"
                         class="form-control"
                         value="{{ search_query }}"
-                        placeholder="Example: 19 or chapify_test.txt"
+                        placeholder="Example: 19 or report.pdf"
                     >
                 </div>
 
@@ -91,7 +91,7 @@
                                     <td>{{ request_item.document.file_name }}</td>
                                     <td>
                                         <span class="badge bg-secondary">
-                                            {{ request_item.status }}
+                                            {{ request_item.get_status_display }}
                                         </span>
                                     </td>
                                     <td>{{ request_item.document_pages }}</td>
@@ -106,7 +106,11 @@
                                             View
                                         </a>
 
-                                        {% if request_item.status == "AWAITING_PAYMENT" %}
+                                        {% if request_item.is_open %}
+                                            <a href="{% url 'payment' request_item.id %}" class="btn btn-outline-success btn-sm">
+                                                Pay
+                                            </a>
+
                                             <a href="{% url 'edit_print_request' request_item.id %}" class="btn btn-outline-primary btn-sm">
                                                 Edit
                                             </a>

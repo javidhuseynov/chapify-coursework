@@ -41,9 +41,10 @@ class PrintRequestAdmin(admin.ModelAdmin):
 
 @admin.register(PaymentTransaction)
 class PaymentTransactionAdmin(admin.ModelAdmin):
-    list_display = ("print_request", "amount", "payment_status", "payment_date", "gateway_reference")
+    list_display = ("reference", "print_request", "amount", "currency", "payment_status", "payment_date", "gateway_reference")
     list_filter = ("payment_status", "payment_date")
-    search_fields = ("gateway_reference", "print_request__user__username")
+    search_fields = ("reference", "gateway_reference", "print_request__user__username")
+    readonly_fields = ("reference",)
 
 
 @admin.register(Printer)
@@ -55,7 +56,7 @@ class PrinterAdmin(admin.ModelAdmin):
 
 @admin.register(PrintJob)
 class PrintJobAdmin(admin.ModelAdmin):
-    list_display = ("print_request", "printer", "job_status", "created_at", "completed_at")
+    list_display = ("print_request", "printer", "job_status", "created_at", "started_at", "completed_at", "failure_reason")
     list_filter = ("job_status", "created_at", "completed_at")
     search_fields = ("print_request__user__username", "printer__printer_name")
 

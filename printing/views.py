@@ -1,11 +1,30 @@
-import os
+import json
 
+from django.contrib import messages
+from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import LoginView, LogoutView
 from django.db.models import Count, Q, Sum
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET, require_POST
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from . import payments, services
+from .forms import DocumentUploadForm, PrintSettingsForm, RegisterForm
+from .models import (
+    AuditLog,
+    Document,
+    PaymentTransaction,
+    Printer,
+    PrintJob,
+    PrintRequest,
+)
+from .permissions import IsChapifyAdmin, chapify_admin_required
 from .serializers import (
     AuditLogSerializer,
     CreatePrintRequestSerializer,
@@ -15,69 +34,65 @@ from .serializers import (
     PrinterSerializer,
 )
 
-from django.contrib.auth import login
-from django.contrib.auth.views import LoginView, LogoutView
-from django.contrib.auth.decorators import login_required
-from django.contrib.admin.views.decorators import staff_member_required
-from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
 
-from .forms import DocumentUploadForm, PrintSettingsForm, RegisterForm
-from .models import (
-    AuditLog,
-    Document,
-    PaymentTransaction,
-    Printer,
-    PrintJob,
-    PrintRequest,
-    PrintSettings,
-    Profile,
-)
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def get_user_print_request_or_404(request, request_id):
+    """Object-level access control: users only ever see their own requests."""
     return get_object_or_404(
-        PrintRequest,
+        PrintRequest.objects.select_related("document", "settings"),
         id=request_id,
         user=request.user,
     )
 
 
 def get_user_document_or_404(request, document_id):
-    return get_object_or_404(
-        Document,
-        id=document_id,
-        user=request.user,
-    )
-
-def is_chapify_admin(user):
-    return (
-        user.is_authenticated
-        and hasattr(user, "profile")
-        and user.profile.role == Profile.ROLE_ADMIN
-    )
+    return get_object_or_404(Document, id=document_id, user=request.user)
 
 
-def admin_required_response():
-    return Response(
-        {"detail": "Administrator privileges are required."},
-        status=403,
-    )
+def filter_print_requests(queryset, params, include_username=False):
+    status_filter = params.get("status", "").strip()
+    search_query = params.get("q", "").strip()
+
+    if status_filter:
+        queryset = queryset.filter(status=status_filter)
+
+    if search_query:
+        query_filter = Q(document__file_name__icontains=search_query)
+
+        if include_username:
+            query_filter |= Q(user__username__icontains=search_query)
+
+        if search_query.isdigit():
+            query_filter |= Q(id=int(search_query))
+
+        queryset = queryset.filter(query_filter)
+
+    return queryset, status_filter, search_query
+
+
+# ---------------------------------------------------------------------------
+# Accounts
+# ---------------------------------------------------------------------------
 
 def home(request):
     return render(request, "printing/home.html")
+
 
 def register(request):
     if request.method == "POST":
         form = RegisterForm(request.POST)
 
         if form.is_valid():
-            user = form.save()
+            user = form.save()  # the Profile is created by printing.signals
             login(request, user)
 
-            AuditLog.objects.create(
+            services.audit(
+                AuditLog.EVENT_LOGIN_SUCCESS,
+                f"New user registered and logged in: {user.username}",
                 user=user,
-                event_type=AuditLog.EVENT_LOGIN_SUCCESS,
-                description=f"New user registered and logged in: {user.username}",
             )
 
             return redirect("home")
@@ -94,37 +109,18 @@ class ChapifyLoginView(LoginView):
 class ChapifyLogoutView(LogoutView):
     pass
 
+
+# ---------------------------------------------------------------------------
+# User workflow (web)
+# ---------------------------------------------------------------------------
+
 @login_required
 def upload_document(request):
     if request.method == "POST":
         form = DocumentUploadForm(request.POST, request.FILES)
 
         if form.is_valid():
-            uploaded_file = form.cleaned_data["file"]
-            extension = os.path.splitext(uploaded_file.name)[1].lower().replace(".", "")
-
-            document = Document.objects.create(
-                user=request.user,
-                file=uploaded_file,
-                file_name=uploaded_file.name,
-                file_type=extension,
-                file_size=uploaded_file.size,
-                validation_status=Document.STATUS_VALID,
-                temporary_storage_path=f"documents/{uploaded_file.name}",
-            )
-
-            AuditLog.objects.create(
-                user=request.user,
-                event_type=AuditLog.EVENT_DOCUMENT_UPLOADED,
-                description=f"User uploaded document: {document.file_name}",
-            )
-
-            AuditLog.objects.create(
-                user=request.user,
-                event_type=AuditLog.EVENT_DOCUMENT_VALIDATED,
-                description=f"Document validated successfully: {document.file_name}",
-            )
-
+            document = services.store_uploaded_document(request.user, form.cleaned_data["file"])
             return redirect("print_settings", document_id=document.id)
     else:
         form = DocumentUploadForm()
@@ -136,173 +132,125 @@ def upload_document(request):
 def print_settings(request, document_id):
     document = get_user_document_or_404(request, document_id)
 
+    try:
+        services.ensure_document_can_be_used(document)
+    except services.WorkflowError as error:
+        messages.error(request, str(error))
+        existing = PrintRequest.objects.filter(document=document, user=request.user).first()
+        if existing:
+            return redirect("request_status", request_id=existing.id)
+        return redirect("upload_document")
+
     if request.method == "POST":
         form = PrintSettingsForm(request.POST)
 
         if form.is_valid():
-            settings = form.save()
-            document_pages = form.cleaned_data["document_pages"]
-
-            print_request = PrintRequest.objects.create(
-                user=request.user,
-                document=document,
-                settings=settings,
-                document_pages=document_pages,
-                status=PrintRequest.STATUS_PRICE_CALCULATED,
-            )
-
-            print_request.calculate_price()
-            print_request.status = PrintRequest.STATUS_AWAITING_PAYMENT
-            print_request.save()
-            AuditLog.objects.create(
-                user=request.user,
-                print_request=print_request,
-                event_type=AuditLog.EVENT_PRINT_REQUEST_CREATED,
-                description=(
-                    f"Print request #{print_request.id} created. "
-                    f"Pages: {print_request.document_pages}, "
-                    f"copies: {settings.copies}, "
-                    f"total price: {print_request.total_price:.2f} EUR."
-                ),
-            )
+            try:
+                print_request = services.create_print_request(
+                    request.user,
+                    document,
+                    services.PrintOptions.from_cleaned_data(form.cleaned_data),
+                )
+            except services.WorkflowError as error:
+                messages.error(request, str(error))
+                return redirect("request_history")
 
             return redirect("payment", request_id=print_request.id)
     else:
         form = PrintSettingsForm()
 
-    return render(
-        request,
-        "printing/print_settings.html",
-        {
-            "form": form,
-            "document": document,
-        },
-    )
+    return render(request, "printing/print_settings.html", {"form": form, "document": document})
+
 
 @login_required
 def payment(request, request_id):
     print_request = get_user_print_request_or_404(request, request_id)
-    existing_payment = PaymentTransaction.objects.filter(print_request=print_request).first()
 
-    if existing_payment:
-        return redirect("request_status", request_id=print_request.id)
-
-    if print_request.status != PrintRequest.STATUS_AWAITING_PAYMENT:
+    if not print_request.is_open:
         return redirect("request_status", request_id=print_request.id)
 
     if request.method == "POST":
-        action = request.POST.get("action")
-
-        if action == "confirm":
-            payment_transaction = PaymentTransaction.objects.create(
-                print_request=print_request,
-                amount=print_request.total_price,
-                payment_status=PaymentTransaction.STATUS_CONFIRMED,
-                gateway_reference=f"SIM-{print_request.id:05d}",
-            )
-
-            print_request.status = PrintRequest.STATUS_PAYMENT_CONFIRMED
-            print_request.save()
-
-            printer = Printer.objects.filter(printer_status=Printer.STATUS_AVAILABLE).first()
-
-            if printer is None:
-                printer = Printer.objects.create(
-                    printer_name="Default Printer",
-                    location="Library / Study Center",
-                    printer_status=Printer.STATUS_AVAILABLE,
-                )
-
-            print_job = PrintJob.objects.create(
-                print_request=print_request,
-                printer=printer,
-                job_status=PrintJob.STATUS_COMPLETED,
-                completed_at=timezone.now(),
-            )
-
-            AuditLog.objects.create(
-                user=request.user,
-                print_request=print_request,
-                event_type=AuditLog.EVENT_PAYMENT_CONFIRMED,
-                description=f"Payment confirmed. Transaction reference: {payment_transaction.gateway_reference}",
-            )
-
-            AuditLog.objects.create(
-                user=request.user,
-                print_request=print_request,
-                event_type=AuditLog.EVENT_PRINT_JOB_CREATED,
-                description=f"Print job created for request #{print_request.id}.",
-            )
-
-            file_deleted = print_request.document.delete_file_from_storage()
-
-            if file_deleted:
-                AuditLog.objects.create(
-                    user=request.user,
-                    print_request=print_request,
-                    event_type=AuditLog.EVENT_DOCUMENT_DELETED,
-                    description=(
-                        f"Uploaded document file for request #{print_request.id} "
-                        f"was deleted from storage after print job completion."
-                    ),
-                )
-
+        try:
+            payment_attempt = services.initiate_payment(print_request, request.user)
+        except services.WorkflowError as error:
+            messages.error(request, str(error))
             return redirect("request_status", request_id=print_request.id)
 
-        if action == "reject":
-            PaymentTransaction.objects.create(
-                print_request=print_request,
-                amount=print_request.total_price,
-                payment_status=PaymentTransaction.STATUS_REJECTED,
-                gateway_reference=f"SIM-REJECT-{print_request.id:05d}",
-            )
-
-            print_request.status = PrintRequest.STATUS_PAYMENT_REJECTED
-            print_request.save()
-
-            AuditLog.objects.create(
-                user=request.user,
-                print_request=print_request,
-                event_type=AuditLog.EVENT_PAYMENT_REJECTED,
-                description=f"Payment rejected for request #{print_request.id}.",
-            )
-
-            file_deleted = print_request.document.delete_file_from_storage()
-
-            if file_deleted:
-                AuditLog.objects.create(
-                    user=request.user,
-                    print_request=print_request,
-                    event_type=AuditLog.EVENT_DOCUMENT_DELETED,
-                    description=(
-                        f"Uploaded document file for request #{print_request.id} "
-                        f"was deleted from storage after payment rejection."
-                    ),
-                )
-
-            return redirect("request_status", request_id=print_request.id)
+        return redirect(payments.build_checkout_url(request, payment_attempt))
 
     return render(
         request,
         "printing/payment.html",
         {
             "print_request": print_request,
+            "last_payment": print_request.latest_payment(),
         },
     )
+
+
+@require_GET
+def payment_return(request):
+    """Return URL: the gateway sends the payer back here with a signed result."""
+    token = request.GET.get("notification", "")
+
+    try:
+        outcome = payments.handle_notification(token)
+    except services.WorkflowError as error:
+        messages.error(request, str(error))
+        return redirect("request_history")
+
+    if outcome.payment.payment_status == PaymentTransaction.STATUS_CONFIRMED:
+        messages.success(request, "Payment confirmed by the gateway. Your print job is in the queue.")
+    else:
+        messages.warning(request, "The payment was declined by the gateway. You can try again or cancel the request.")
+
+    return redirect("request_status", request_id=outcome.payment.print_request_id)
+
+
+@csrf_exempt
+@require_POST
+def payment_callback(request):
+    """Server-to-server notification endpoint for the gateway (webhook).
+
+    Accepts the signed notification as form field "notification" or as JSON
+    {"notification": "..."}. CSRF protection is not applicable here because
+    the request is authenticated by its HMAC signature, not by a session.
+    """
+    token = request.POST.get("notification", "")
+
+    if not token and request.content_type == "application/json":
+        try:
+            token = json.loads(request.body or b"{}").get("notification", "")
+        except (ValueError, AttributeError):
+            token = ""
+
+    try:
+        outcome = payments.handle_notification(token)
+    except services.WorkflowError as error:
+        return JsonResponse({"accepted": False, "detail": str(error)}, status=400)
+
+    return JsonResponse(
+        {
+            "accepted": True,
+            "result": outcome.result,
+            "payment_reference": str(outcome.payment.reference),
+            "payment_status": outcome.payment.payment_status,
+        }
+    )
+
 
 @login_required
 def request_status(request, request_id):
     print_request = get_user_print_request_or_404(request, request_id)
-    payment_transaction = PaymentTransaction.objects.filter(print_request=print_request).first()
-    print_job = PrintJob.objects.filter(print_request=print_request).first()
 
     return render(
         request,
         "printing/request_status.html",
         {
             "print_request": print_request,
-            "payment_transaction": payment_transaction,
-            "print_job": print_job,
+            "payment_transaction": print_request.latest_payment(),
+            "payment_attempts": print_request.payments.order_by("-payment_date", "-id"),
+            "print_job": PrintJob.objects.filter(print_request=print_request).select_related("printer").first(),
         },
     )
 
@@ -315,20 +263,7 @@ def request_history(request):
         .select_related("document", "settings")
         .order_by("-created_at")
     )
-
-    status_filter = request.GET.get("status", "").strip()
-    search_query = request.GET.get("q", "").strip()
-
-    if status_filter:
-        print_requests = print_requests.filter(status=status_filter)
-
-    if search_query:
-        query_filter = Q(document__file_name__icontains=search_query)
-
-        if search_query.isdigit():
-            query_filter |= Q(id=int(search_query))
-
-        print_requests = print_requests.filter(query_filter)
+    print_requests, status_filter, search_query = filter_print_requests(print_requests, request.GET)
 
     return render(
         request,
@@ -346,42 +281,22 @@ def request_history(request):
 def edit_print_request(request, request_id):
     print_request = get_user_print_request_or_404(request, request_id)
 
-    existing_payment = PaymentTransaction.objects.filter(
-        print_request=print_request
-    ).first()
-
-    if existing_payment or print_request.status != PrintRequest.STATUS_AWAITING_PAYMENT:
+    if not print_request.is_open:
         return redirect("request_status", request_id=print_request.id)
 
     if request.method == "POST":
         form = PrintSettingsForm(request.POST)
 
         if form.is_valid():
-            settings = print_request.settings
-
-            settings.copies = form.cleaned_data["copies"]
-            settings.color_mode = form.cleaned_data["color_mode"]
-            settings.paper_format = form.cleaned_data["paper_format"]
-            settings.duplex_mode = form.cleaned_data["duplex_mode"]
-            settings.save()
-
-            print_request.document_pages = form.cleaned_data["document_pages"]
-            print_request.status = PrintRequest.STATUS_PRICE_CALCULATED
-            print_request.calculate_price()
-            print_request.status = PrintRequest.STATUS_AWAITING_PAYMENT
-            print_request.save()
-
-            AuditLog.objects.create(
-                user=request.user,
-                print_request=print_request,
-                event_type=AuditLog.EVENT_ADMIN_ACTION,
-                description=(
-                    f"User updated print request #{print_request.id}. "
-                    f"New pages: {print_request.document_pages}, "
-                    f"copies: {settings.copies}, "
-                    f"total price: {print_request.total_price:.2f} EUR."
-                ),
-            )
+            try:
+                services.update_print_request(
+                    print_request,
+                    services.PrintOptions.from_cleaned_data(form.cleaned_data),
+                    request.user,
+                )
+            except services.WorkflowError as error:
+                messages.error(request, str(error))
+                return redirect("request_status", request_id=print_request.id)
 
             return redirect("payment", request_id=print_request.id)
     else:
@@ -398,10 +313,7 @@ def edit_print_request(request, request_id):
     return render(
         request,
         "printing/edit_print_request.html",
-        {
-            "form": form,
-            "print_request": print_request,
-        },
+        {"form": form, "print_request": print_request},
     )
 
 
@@ -409,165 +321,103 @@ def edit_print_request(request, request_id):
 def cancel_print_request(request, request_id):
     print_request = get_user_print_request_or_404(request, request_id)
 
-    existing_payment = PaymentTransaction.objects.filter(
-        print_request=print_request
-    ).first()
-
-    if existing_payment or print_request.status != PrintRequest.STATUS_AWAITING_PAYMENT:
+    if not print_request.is_open:
         return redirect("request_status", request_id=print_request.id)
 
     if request.method == "POST":
-        print_request.status = PrintRequest.STATUS_CANCELLED
-        print_request.save()
+        try:
+            services.cancel_print_request(print_request, request.user)
+        except services.WorkflowError as error:
+            messages.error(request, str(error))
+            return redirect("request_status", request_id=print_request.id)
 
-        file_deleted = print_request.document.delete_file_from_storage()
-
-        AuditLog.objects.create(
-            user=request.user,
-            print_request=print_request,
-            event_type=AuditLog.EVENT_ADMIN_ACTION,
-            description=(
-                f"User cancelled print request #{print_request.id}. "
-                f"Uploaded file deleted: {file_deleted}."
-            ),
-        )
-
-        if file_deleted:
-            AuditLog.objects.create(
-                user=request.user,
-                print_request=print_request,
-                event_type=AuditLog.EVENT_DOCUMENT_DELETED,
-                description=(
-                    f"Uploaded document file for cancelled request "
-                    f"#{print_request.id} was deleted from storage."
-                ),
-            )
-
+        messages.success(request, f"Print request #{print_request.id} was cancelled.")
         return redirect("request_history")
 
-    return render(
-        request,
-        "printing/cancel_print_request.html",
-        {
-            "print_request": print_request,
-        },
-    )
+    return render(request, "printing/cancel_print_request.html", {"print_request": print_request})
 
 
-@staff_member_required
+# ---------------------------------------------------------------------------
+# Administrator pages (web)
+# ---------------------------------------------------------------------------
+
+@chapify_admin_required
 def admin_report(request):
-    total_requests = PrintRequest.objects.count()
     confirmed_payments = PaymentTransaction.objects.filter(
         payment_status=PaymentTransaction.STATUS_CONFIRMED
     )
     rejected_payments = PaymentTransaction.objects.filter(
         payment_status=PaymentTransaction.STATUS_REJECTED
     )
-
-    total_confirmed_amount = confirmed_payments.aggregate(
-        total=Sum("amount")
-    )["total"] or 0
-
-    requests_by_status = (
-        PrintRequest.objects
-        .values("status")
-        .annotate(total=Count("id"))
-        .order_by("status")
-    )
-
-    payments_by_status = (
-        PaymentTransaction.objects
-        .values("payment_status")
-        .annotate(total=Count("id"))
-        .order_by("payment_status")
-    )
-
-    jobs_by_status = (
-        PrintJob.objects
-        .values("job_status")
-        .annotate(total=Count("id"))
-        .order_by("job_status")
-    )
-
-    recent_requests = (
-        PrintRequest.objects
-        .select_related("user", "document", "settings")
-        .order_by("-created_at")[:20]
-    )
-
-    recent_logs = AuditLog.objects.order_by("-event_timestamp")[:20]
 
     return render(
         request,
         "printing/admin_report.html",
         {
-            "total_requests": total_requests,
+            "total_requests": PrintRequest.objects.count(),
             "confirmed_payments_count": confirmed_payments.count(),
             "rejected_payments_count": rejected_payments.count(),
-            "total_confirmed_amount": total_confirmed_amount,
-            "requests_by_status": requests_by_status,
-            "payments_by_status": payments_by_status,
-            "jobs_by_status": jobs_by_status,
-            "recent_requests": recent_requests,
-            "recent_logs": recent_logs,
+            "total_confirmed_amount": confirmed_payments.aggregate(total=Sum("amount"))["total"] or 0,
+            "requests_by_status": (
+                PrintRequest.objects.values("status").annotate(total=Count("id")).order_by("status")
+            ),
+            "payments_by_status": (
+                PaymentTransaction.objects.values("payment_status").annotate(total=Count("id")).order_by("payment_status")
+            ),
+            "jobs_by_status": (
+                PrintJob.objects.values("job_status").annotate(total=Count("id")).order_by("job_status")
+            ),
+            "recent_requests": (
+                PrintRequest.objects.select_related("user", "document", "settings").order_by("-created_at")[:20]
+            ),
+            "recent_logs": AuditLog.objects.select_related("user").order_by("-event_timestamp")[:20],
         },
     )
 
 
-
-@staff_member_required
+@chapify_admin_required
 def admin_dashboard(request):
-    requests = (
+    all_requests = (
         PrintRequest.objects
         .select_related("user", "document", "settings")
         .order_by("-created_at")
     )
+    filtered_requests, status_filter, search_query = filter_print_requests(
+        all_requests, request.GET, include_username=True
+    )
 
-    status_filter = request.GET.get("status", "").strip()
-    search_query = request.GET.get("q", "").strip()
-
-    if status_filter:
-        requests = requests.filter(status=status_filter)
-
-    if search_query:
-        query_filter = (
-            Q(document__file_name__icontains=search_query)
-            | Q(user__username__icontains=search_query)
-        )
-
-        if search_query.isdigit():
-            query_filter |= Q(id=int(search_query))
-
-        requests = requests.filter(query_filter)
-
-    total_requests = PrintRequest.objects.count()
-    confirmed_payments = PaymentTransaction.objects.filter(
-        payment_status=PaymentTransaction.STATUS_CONFIRMED
-    ).count()
-    rejected_payments = PaymentTransaction.objects.filter(
-        payment_status=PaymentTransaction.STATUS_REJECTED
-    ).count()
-    completed_jobs = PrintJob.objects.filter(
-        job_status=PrintJob.STATUS_COMPLETED
-    ).count()
-    failed_jobs = PrintJob.objects.filter(
-        job_status=PrintJob.STATUS_FAILED
-    ).count()
-
-    recent_requests = requests[:10]
-    recent_logs = AuditLog.objects.order_by("-event_timestamp")[:10]
+    active_jobs = (
+        PrintJob.objects
+        .filter(job_status__in=[PrintJob.STATUS_QUEUED, PrintJob.STATUS_IN_PROGRESS])
+        .select_related("print_request__user", "printer")
+        .order_by("created_at")
+    )
+    failed_jobs = (
+        PrintJob.objects
+        .filter(job_status=PrintJob.STATUS_FAILED)
+        .select_related("print_request__user", "printer")
+        .order_by("-completed_at")[:10]
+    )
 
     return render(
         request,
         "printing/admin_dashboard.html",
         {
-            "total_requests": total_requests,
-            "confirmed_payments": confirmed_payments,
-            "rejected_payments": rejected_payments,
-            "completed_jobs": completed_jobs,
-            "failed_jobs": failed_jobs,
-            "recent_requests": recent_requests,
-            "recent_logs": recent_logs,
+            "total_requests": PrintRequest.objects.count(),
+            "confirmed_payments": PaymentTransaction.objects.filter(
+                payment_status=PaymentTransaction.STATUS_CONFIRMED
+            ).count(),
+            "rejected_payments": PaymentTransaction.objects.filter(
+                payment_status=PaymentTransaction.STATUS_REJECTED
+            ).count(),
+            "completed_jobs": PrintJob.objects.filter(job_status=PrintJob.STATUS_COMPLETED).count(),
+            "failed_jobs": PrintJob.objects.filter(job_status=PrintJob.STATUS_FAILED).count(),
+            "queued_jobs": PrintJob.objects.filter(job_status=PrintJob.STATUS_QUEUED).count(),
+            "active_jobs": active_jobs,
+            "failed_job_list": failed_jobs,
+            "printers": Printer.objects.order_by("printer_name"),
+            "recent_requests": filtered_requests[:10],
+            "recent_logs": AuditLog.objects.select_related("user").order_by("-event_timestamp")[:10],
             "status_choices": PrintRequest.STATUS_CHOICES,
             "selected_status": status_filter,
             "search_query": search_query,
@@ -575,46 +425,56 @@ def admin_dashboard(request):
     )
 
 
+@chapify_admin_required
+@require_POST
+def admin_process_print_job(request):
+    """Demo control for the simulated print server: process the next queued job."""
+    job = services.process_next_print_job(
+        force_failure=request.POST.get("simulate_failure") == "1",
+        actor=request.user,
+    )
+
+    if job is None:
+        messages.info(request, "No job could be processed: the queue is empty or no printer is available.")
+    elif job.job_status == PrintJob.STATUS_COMPLETED:
+        messages.success(request, f"Print job #{job.id} completed on {job.printer}.")
+    else:
+        messages.warning(request, f"Print job #{job.id} failed: {job.failure_reason}")
+
+    return redirect("admin_dashboard")
+
+
+# ---------------------------------------------------------------------------
+# REST API - user endpoints
+# ---------------------------------------------------------------------------
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def api_my_requests(request):
-    print_requests = PrintRequest.objects.filter(user=request.user).order_by("-created_at")
-
-    status_filter = request.GET.get("status", "").strip()
-    search_query = request.GET.get("q", "").strip()
-
-    if status_filter:
-        print_requests = print_requests.filter(status=status_filter)
-
-    if search_query:
-        query_filter = Q(document__file_name__icontains=search_query)
-
-        if search_query.isdigit():
-            query_filter |= Q(id=int(search_query))
-
-        print_requests = print_requests.filter(query_filter)
-
-    serializer = PrintRequestSerializer(print_requests, many=True)
-    return Response(serializer.data)
+    print_requests = (
+        PrintRequest.objects
+        .filter(user=request.user)
+        .select_related("document", "settings")
+        .order_by("-created_at")
+    )
+    print_requests, _, _ = filter_print_requests(print_requests, request.GET)
+    return Response(PrintRequestSerializer(print_requests, many=True).data)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def api_request_detail(request, request_id):
     print_request = get_user_print_request_or_404(request, request_id)
-    serializer = PrintRequestSerializer(print_request)
-    return Response(serializer.data)
+    return Response(PrintRequestSerializer(print_request).data)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def api_my_payments(request):
-    payments = PaymentTransaction.objects.filter(
+    user_payments = PaymentTransaction.objects.filter(
         print_request__user=request.user
     ).order_by("-payment_date")
-
-    serializer = PaymentTransactionSerializer(payments, many=True)
-    return Response(serializer.data)
+    return Response(PaymentTransactionSerializer(user_payments, many=True).data)
 
 
 @api_view(["GET"])
@@ -622,108 +482,9 @@ def api_my_payments(request):
 def api_my_print_jobs(request):
     jobs = PrintJob.objects.filter(
         print_request__user=request.user
-    ).order_by("-created_at")
+    ).select_related("printer").order_by("-created_at")
+    return Response(PrintJobSerializer(jobs, many=True).data)
 
-    serializer = PrintJobSerializer(jobs, many=True)
-    return Response(serializer.data)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def api_admin_summary(request):
-    if not is_chapify_admin(request.user):
-        return admin_required_response()
-
-    data = {
-        "total_requests": PrintRequest.objects.count(),
-        "confirmed_payments": PaymentTransaction.objects.filter(
-            payment_status=PaymentTransaction.STATUS_CONFIRMED
-        ).count(),
-        "rejected_payments": PaymentTransaction.objects.filter(
-            payment_status=PaymentTransaction.STATUS_REJECTED
-        ).count(),
-        "completed_jobs": PrintJob.objects.filter(
-            job_status=PrintJob.STATUS_COMPLETED
-        ).count(),
-        "failed_jobs": PrintJob.objects.filter(
-            job_status=PrintJob.STATUS_FAILED
-        ).count(),
-    }
-
-    return Response(data)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def api_admin_requests(request):
-    if not is_chapify_admin(request.user):
-        return admin_required_response()
-
-    print_requests = PrintRequest.objects.all().order_by("-created_at")
-
-    status_filter = request.GET.get("status", "").strip()
-    search_query = request.GET.get("q", "").strip()
-
-    if status_filter:
-        print_requests = print_requests.filter(status=status_filter)
-
-    if search_query:
-        query_filter = (
-            Q(document__file_name__icontains=search_query)
-            | Q(user__username__icontains=search_query)
-        )
-
-        if search_query.isdigit():
-            query_filter |= Q(id=int(search_query))
-
-        print_requests = print_requests.filter(query_filter)
-
-    serializer = PrintRequestSerializer(print_requests, many=True)
-    return Response(serializer.data)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def api_admin_transactions(request):
-    if not is_chapify_admin(request.user):
-        return admin_required_response()
-
-    payments = PaymentTransaction.objects.all().order_by("-payment_date")
-    serializer = PaymentTransactionSerializer(payments, many=True)
-    return Response(serializer.data)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def api_admin_print_jobs(request):
-    if not is_chapify_admin(request.user):
-        return admin_required_response()
-
-    jobs = PrintJob.objects.all().order_by("-created_at")
-    serializer = PrintJobSerializer(jobs, many=True)
-    return Response(serializer.data)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def api_admin_printers(request):
-    if not is_chapify_admin(request.user):
-        return admin_required_response()
-
-    printers = Printer.objects.all().order_by("printer_name")
-    serializer = PrinterSerializer(printers, many=True)
-    return Response(serializer.data)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def api_admin_audit_logs(request):
-    if not is_chapify_admin(request.user):
-        return admin_required_response()
-
-    logs = AuditLog.objects.all().order_by("-event_timestamp")[:100]
-    serializer = AuditLogSerializer(logs, many=True)
-    return Response(serializer.data)
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -731,227 +492,135 @@ def api_admin_audit_logs(request):
 def api_create_print_request(request):
     serializer = CreatePrintRequestSerializer(data=request.data)
 
-    if serializer.is_valid():
-        uploaded_file = serializer.validated_data["file"]
-        extension = os.path.splitext(uploaded_file.name)[1].lower().replace(".", "")
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=400)
 
-        document = Document.objects.create(
-            user=request.user,
-            file=uploaded_file,
-            file_name=uploaded_file.name,
-            file_type=extension,
-            file_size=uploaded_file.size,
-            validation_status=Document.STATUS_VALID,
-            temporary_storage_path=f"documents/{uploaded_file.name}",
+    data = serializer.validated_data
+    document = services.store_uploaded_document(request.user, data["file"], channel="api")
+
+    try:
+        print_request = services.create_print_request(
+            request.user,
+            document,
+            services.PrintOptions.from_cleaned_data(data),
+            channel="api",
         )
-
-        settings = PrintSettings.objects.create(
-            copies=serializer.validated_data["copies"],
-            color_mode=serializer.validated_data["color_mode"],
-            paper_format=serializer.validated_data["paper_format"],
-            duplex_mode=serializer.validated_data["duplex_mode"],
-        )
-
-        print_request = PrintRequest.objects.create(
-            user=request.user,
-            document=document,
-            settings=settings,
-            document_pages=serializer.validated_data["document_pages"],
-            status=PrintRequest.STATUS_PRICE_CALCULATED,
-        )
-
-        print_request.calculate_price()
-        print_request.status = PrintRequest.STATUS_AWAITING_PAYMENT
-        print_request.save()
-        AuditLog.objects.create(
-            user=request.user,
-            print_request=print_request,
-            event_type=AuditLog.EVENT_PRINT_REQUEST_CREATED,
-            description=(
-                f"API print request #{print_request.id} created. "
-                f"Pages: {print_request.document_pages}, "
-                f"copies: {settings.copies}, "
-                f"total price: {float(print_request.total_price):.2f} EUR."
-            ),
-        )
-
-        AuditLog.objects.create(
-            user=request.user,
-            print_request=print_request,
-            event_type=AuditLog.EVENT_DOCUMENT_UPLOADED,
-            description=f"API document uploaded: {document.file_name}",
-        )
-
-        AuditLog.objects.create(
-            user=request.user,
-            print_request=print_request,
-            event_type=AuditLog.EVENT_DOCUMENT_VALIDATED,
-            description=f"API document validated successfully: {document.file_name}",
-        )
-
-        response_serializer = PrintRequestSerializer(print_request)
-
-        return Response(
-            {
-                "message": "Print request created successfully.",
-                "print_request": response_serializer.data,
-            },
-            status=201,
-        )
-
-    return Response(serializer.errors, status=400)
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def api_confirm_payment(request, request_id):
-    print_request = get_user_print_request_or_404(request, request_id)
-
-    existing_payment = PaymentTransaction.objects.filter(print_request=print_request).first()
-
-    if existing_payment:
-        return Response(
-            {
-                "message": "Payment was already processed for this request.",
-                "payment_status": existing_payment.payment_status,
-            },
-            status=400,
-        )
-
-    if print_request.status != PrintRequest.STATUS_AWAITING_PAYMENT:
-        return Response(
-            {
-                "message": "This print request is not awaiting payment.",
-                "current_status": print_request.status,
-            },
-            status=400,
-        )
-
-    payment_transaction = PaymentTransaction.objects.create(
-        print_request=print_request,
-        amount=print_request.total_price,
-        payment_status=PaymentTransaction.STATUS_CONFIRMED,
-        gateway_reference=f"API-SIM-{print_request.id:05d}",
-    )
-
-    print_request.status = PrintRequest.STATUS_PAYMENT_CONFIRMED
-    print_request.save()
-
-    printer = Printer.objects.filter(printer_status=Printer.STATUS_AVAILABLE).first()
-
-    if printer is None:
-        printer = Printer.objects.create(
-            printer_name="Default Printer",
-            location="Library / Study Center",
-            printer_status=Printer.STATUS_AVAILABLE,
-        )
-
-    print_job = PrintJob.objects.create(
-        print_request=print_request,
-        printer=printer,
-        job_status=PrintJob.STATUS_COMPLETED,
-        completed_at=timezone.now(),
-    )
-
-    AuditLog.objects.create(
-        user=request.user,
-        print_request=print_request,
-        event_type=AuditLog.EVENT_PAYMENT_CONFIRMED,
-        description=f"API payment confirmed. Transaction reference: {payment_transaction.gateway_reference}",
-    )
-
-    AuditLog.objects.create(
-        user=request.user,
-        print_request=print_request,
-        event_type=AuditLog.EVENT_PRINT_JOB_CREATED,
-        description=f"API print job created for request #{print_request.id}.",
-    )
-
-    file_deleted = print_request.document.delete_file_from_storage()
-
-    if file_deleted:
-        AuditLog.objects.create(
-            user=request.user,
-            print_request=print_request,
-            event_type=AuditLog.EVENT_DOCUMENT_DELETED,
-            description=(
-                f"API uploaded document file for request #{print_request.id} "
-                f"was deleted from storage after print job completion."
-            ),
-        )
+    except services.WorkflowError as error:
+        return Response({"detail": str(error)}, status=400)
 
     return Response(
         {
-            "message": "Payment confirmed and print job created.",
-            "payment_id": payment_transaction.id,
-            "payment_status": payment_transaction.payment_status,
-            "print_job_id": print_job.id,
-            "print_job_status": print_job.job_status,
-            "document_file_deleted": file_deleted,
+            "message": "Print request created successfully.",
+            "print_request": PrintRequestSerializer(print_request).data,
         },
         status=201,
     )
 
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def api_reject_payment(request, request_id):
+def api_initiate_payment(request, request_id):
+    """Start a payment. Returns the gateway checkout URL for the payer.
+
+    There is deliberately no endpoint that lets a user confirm or reject a
+    payment: only a signed gateway notification can do that.
+    """
     print_request = get_user_print_request_or_404(request, request_id)
 
-    existing_payment = PaymentTransaction.objects.filter(print_request=print_request).first()
-
-    if existing_payment:
-        return Response(
-            {
-                "message": "Payment was already processed for this request.",
-                "payment_status": existing_payment.payment_status,
-            },
-            status=400,
-        )
-
-    if print_request.status != PrintRequest.STATUS_AWAITING_PAYMENT:
-        return Response(
-            {
-                "message": "This print request is not awaiting payment.",
-                "current_status": print_request.status,
-            },
-            status=400,
-        )
-
-    payment_transaction = PaymentTransaction.objects.create(
-        print_request=print_request,
-        amount=print_request.total_price,
-        payment_status=PaymentTransaction.STATUS_REJECTED,
-        gateway_reference=f"API-SIM-REJECT-{print_request.id:05d}",
-    )
-
-    print_request.status = PrintRequest.STATUS_PAYMENT_REJECTED
-    print_request.save()
-
-    AuditLog.objects.create(
-        user=request.user,
-        print_request=print_request,
-        event_type=AuditLog.EVENT_PAYMENT_REJECTED,
-        description=f"API payment rejected for request #{print_request.id}.",
-    )
-
-    file_deleted = print_request.document.delete_file_from_storage()
-
-    if file_deleted:
-        AuditLog.objects.create(
-            user=request.user,
-            print_request=print_request,
-            event_type=AuditLog.EVENT_DOCUMENT_DELETED,
-            description=(
-                f"API uploaded document file for request #{print_request.id} "
-                f"was deleted from storage after payment rejection."
-            ),
-        )
+    try:
+        payment_attempt = services.initiate_payment(print_request, request.user)
+    except services.WorkflowError as error:
+        return Response({"detail": str(error), "current_status": print_request.status}, status=409)
 
     return Response(
         {
-            "message": "Payment rejected.",
-            "payment_id": payment_transaction.id,
-            "payment_status": payment_transaction.payment_status,
-            "document_file_deleted": file_deleted,
+            "payment_reference": str(payment_attempt.reference),
+            "amount": str(payment_attempt.amount),
+            "currency": payment_attempt.currency,
+            "payment_status": payment_attempt.payment_status,
+            "checkout_url": request.build_absolute_uri(
+                payments.build_checkout_url(request, payment_attempt)
+            ),
         },
         status=201,
     )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def api_cancel_print_request(request, request_id):
+    print_request = get_user_print_request_or_404(request, request_id)
+
+    try:
+        services.cancel_print_request(print_request, request.user)
+    except services.WorkflowError as error:
+        return Response({"detail": str(error)}, status=409)
+
+    print_request.refresh_from_db()
+    return Response(PrintRequestSerializer(print_request).data)
+
+
+# ---------------------------------------------------------------------------
+# REST API - administrator endpoints
+# ---------------------------------------------------------------------------
+
+ADMIN_API_PERMISSIONS = [IsAuthenticated, IsChapifyAdmin]
+
+
+@api_view(["GET"])
+@permission_classes(ADMIN_API_PERMISSIONS)
+def api_admin_summary(request):
+    return Response(
+        {
+            "total_requests": PrintRequest.objects.count(),
+            "confirmed_payments": PaymentTransaction.objects.filter(
+                payment_status=PaymentTransaction.STATUS_CONFIRMED
+            ).count(),
+            "rejected_payments": PaymentTransaction.objects.filter(
+                payment_status=PaymentTransaction.STATUS_REJECTED
+            ).count(),
+            "queued_jobs": PrintJob.objects.filter(job_status=PrintJob.STATUS_QUEUED).count(),
+            "completed_jobs": PrintJob.objects.filter(job_status=PrintJob.STATUS_COMPLETED).count(),
+            "failed_jobs": PrintJob.objects.filter(job_status=PrintJob.STATUS_FAILED).count(),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes(ADMIN_API_PERMISSIONS)
+def api_admin_requests(request):
+    print_requests = (
+        PrintRequest.objects
+        .select_related("document", "settings", "user")
+        .order_by("-created_at")
+    )
+    print_requests, _, _ = filter_print_requests(print_requests, request.GET, include_username=True)
+    return Response(PrintRequestSerializer(print_requests, many=True).data)
+
+
+@api_view(["GET"])
+@permission_classes(ADMIN_API_PERMISSIONS)
+def api_admin_transactions(request):
+    all_payments = PaymentTransaction.objects.all().order_by("-payment_date")
+    return Response(PaymentTransactionSerializer(all_payments, many=True).data)
+
+
+@api_view(["GET"])
+@permission_classes(ADMIN_API_PERMISSIONS)
+def api_admin_print_jobs(request):
+    jobs = PrintJob.objects.select_related("printer").order_by("-created_at")
+    return Response(PrintJobSerializer(jobs, many=True).data)
+
+
+@api_view(["GET"])
+@permission_classes(ADMIN_API_PERMISSIONS)
+def api_admin_printers(request):
+    printers = Printer.objects.all().order_by("printer_name")
+    return Response(PrinterSerializer(printers, many=True).data)
+
+
+@api_view(["GET"])
+@permission_classes(ADMIN_API_PERMISSIONS)
+def api_admin_audit_logs(request):
+    logs = AuditLog.objects.select_related("user").order_by("-event_timestamp")[:100]
+    return Response(AuditLogSerializer(logs, many=True).data)

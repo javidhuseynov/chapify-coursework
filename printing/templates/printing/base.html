@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="utf-8">
     <title>{% block title %}Chapify{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -19,8 +20,10 @@
                 <a class="nav-link" href="{% url 'upload_document' %}">New Request</a>
                 <a class="nav-link" href="{% url 'request_history' %}">My History</a>
 
-                {% if user.is_staff %}
+                {% if is_chapify_admin %}
                     <a class="nav-link" href="{% url 'admin_dashboard' %}">Admin Dashboard</a>
+                {% endif %}
+                {% if user.is_staff %}
                     <a class="nav-link" href="/admin/">Django Admin</a>
                 {% endif %}
 
@@ -39,6 +42,14 @@
 </nav>
 
 <main class="container py-5">
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% else %}alert-info{% endif %}" role="alert">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
     {% block content %}
     {% endblock %}
 </main>

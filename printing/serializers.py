@@ -61,7 +61,9 @@ class PaymentTransactionSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "print_request",
+            "reference",
             "amount",
+            "currency",
             "payment_status",
             "payment_date",
             "gateway_reference",
@@ -90,12 +92,17 @@ class PrintJobSerializer(serializers.ModelSerializer):
             "printer",
             "job_status",
             "created_at",
+            "started_at",
             "completed_at",
+            "failure_reason",
         ]
 
 
 class AuditLogSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source="user.username", read_only=True)
+    username = serializers.SerializerMethodField()
+
+    def get_username(self, obj):
+        return obj.user.username if obj.user_id else None
 
     class Meta:
         model = AuditLog

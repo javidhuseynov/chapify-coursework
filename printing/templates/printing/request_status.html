@@ -17,6 +17,15 @@
     </div>
 </div>
 
+{% if print_request.is_open %}
+<div class="alert alert-light border d-flex flex-wrap gap-2 align-items-center mb-4">
+    <span class="me-2">This request has not been paid yet.</span>
+    <a href="{% url 'payment' print_request.id %}" class="btn btn-success btn-sm">Go to payment</a>
+    <a href="{% url 'edit_print_request' print_request.id %}" class="btn btn-outline-primary btn-sm">Edit</a>
+    <a href="{% url 'cancel_print_request' print_request.id %}" class="btn btn-outline-danger btn-sm">Cancel</a>
+</div>
+{% endif %}
+
 <div class="row">
     <div class="col-md-6 mb-4">
         <div class="card shadow-sm h-100">
@@ -50,6 +59,14 @@
                             {% else %}
                                 <span class="badge bg-secondary">{{ print_request.get_status_display }}</span>
                             {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Settings</th>
+                        <td>
+                            {{ print_request.document_pages }} page(s), {{ print_request.settings.copies }} cop{{ print_request.settings.copies|pluralize:"y,ies" }},
+                            {{ print_request.settings.get_color_mode_display }}, {{ print_request.settings.paper_format }},
+                            {{ print_request.settings.get_duplex_mode_display }}
                         </td>
                     </tr>
                     <tr>
@@ -88,17 +105,29 @@
                         </tr>
                         <tr>
                             <th>Amount</th>
-                            <td>{{ payment_transaction.amount }} EUR</td>
+                            <td>{{ payment_transaction.amount }} {{ payment_transaction.currency }}</td>
                         </tr>
                         <tr>
-                            <th>Gateway reference</th>
-                            <td>{{ payment_transaction.gateway_reference }}</td>
+                            <th>Payment reference</th>
+                            <td><small>{{ payment_transaction.reference }}</small></td>
+                        </tr>
+                        <tr>
+                            <th>Gateway transaction</th>
+                            <td>{{ payment_transaction.gateway_reference|default:"-" }}</td>
                         </tr>
                         <tr>
                             <th>Payment date</th>
                             <td>{{ payment_transaction.payment_date }}</td>
                         </tr>
                     </table>
+                    {% if payment_attempts|length > 1 %}
+                        <p class="text-muted small mt-3 mb-1">All payment attempts</p>
+                        <ul class="small mb-0">
+                            {% for attempt in payment_attempts %}
+                                <li>{{ attempt.payment_date }} - {{ attempt.get_payment_status_display }} - {{ attempt.amount }} {{ attempt.currency }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
                 {% else %}
                     <p class="text-muted mb-0">No payment transaction has been created for this request yet.</p>
                 {% endif %}
@@ -131,22 +160,26 @@
                 </tr>
                 <tr>
                     <th>Printer</th>
-                    <td>{{ print_job.printer }}</td>
+                    <td>{{ print_job.printer|default:"Waiting for an available printer" }}</td>
                 </tr>
                 <tr>
                     <th>Created at</th>
                     <td>{{ print_job.created_at }}</td>
                 </tr>
                 <tr>
-                    <th>Completed at</th>
-                    <td>
-                        {% if print_job.completed_at %}
-                            {{ print_job.completed_at }}
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
+                    <th>Started at</th>
+                    <td>{{ print_job.started_at|default:"-" }}</td>
                 </tr>
+                <tr>
+                    <th>Finished at</th>
+                    <td>{{ print_job.completed_at|default:"-" }}</td>
+                </tr>
+                {% if print_job.failure_reason %}
+                <tr>
+                    <th>Failure reason</th>
+                    <td class="text-danger">{{ print_job.failure_reason }}</td>
+                </tr>
+                {% endif %}
             </table>
         {% else %}
             <p class="text-muted mb-0">

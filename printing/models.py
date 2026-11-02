@@ -1,6 +1,10 @@
+import uuid
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+
+from .pricing import calculate_total_price
 
 class Profile(models.Model):
     ROLE_USER = "USER"
@@ -52,6 +56,9 @@ class Document(models.Model):
         default=STATUS_PENDING
     )
     temporary_storage_path = models.CharField(max_length=500, blank=True)
+
+    def has_file(self):
+        return bool(self.file) and self.file.storage.exists(self.file.name)
 
     def delete_file_from_storage(self):
         if self.file and self.file.storage.exists(self.file.name):
@@ -134,18 +141,27 @@ class PrintRequest(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Requests in these states can still be edited, paid or cancelled.
+    OPEN_STATUSES = (STATUS_AWAITING_PAYMENT, STATUS_PAYMENT_REJECTED)
+    # Final states: the uploaded file is deleted when one of them is reached.
+    TERMINAL_STATUSES = (STATUS_CANCELLED, STATUS_COMPLETED, STATUS_FAILED)
+
+    @property
+    def is_open(self):
+        return self.status in self.OPEN_STATUSES
+
     def calculate_price(self):
-        base_page_price = 0.10
-
-        color_coefficient = 2.00 if self.settings.color_mode == PrintSettings.COLOR_COLOR else 1.00
-        paper_coefficient = 1.80 if self.settings.paper_format == PrintSettings.PAPER_A3 else 1.00
-        duplex_coefficient = 0.90 if self.settings.duplex_mode == PrintSettings.DUPLEX_DOUBLE_SIDED else 1.00
-
-        page_price = base_page_price * color_coefficient * paper_coefficient * duplex_coefficient
-        total = self.document_pages * self.settings.copies * page_price
-
-        self.total_price = round(total, 2)
+        self.total_price = calculate_total_price(
+            document_pages=self.document_pages,
+            copies=self.settings.copies,
+            color_mode=self.settings.color_mode,
+            paper_format=self.settings.paper_format,
+            duplex_mode=self.settings.duplex_mode,
+        )
         return self.total_price
+
+    def latest_payment(self):
+        return self.payments.order_by("-payment_date", "-id").first()
 
     def __str__(self):
         return f"Request #{self.id} - {self.user.username} - {self.status}"
@@ -164,11 +180,31 @@ class PaymentTransaction(models.Model):
         (STATUS_CANCELLED, "Cancelled"),
     ]
 
-    print_request = models.OneToOneField(PrintRequest, on_delete=models.CASCADE)
+    # A request may have several payment attempts (e.g. a declined card followed
+    # by a successful retry), but at most one CONFIRMED payment (constraint below).
+    print_request = models.ForeignKey(
+        PrintRequest,
+        on_delete=models.CASCADE,
+        related_name="payments",
+    )
+    # Chapify's own identifier of this attempt, sent to the gateway.
+    reference = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     amount = models.DecimalField(max_digits=8, decimal_places=2)
+    currency = models.CharField(max_length=3, default="EUR")
     payment_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_INITIATED)
     payment_date = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+    # Transaction identifier returned by the gateway (never card data).
     gateway_reference = models.CharField(max_length=100, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["print_request"],
+                condition=models.Q(payment_status="CONFIRMED"),
+                name="unique_confirmed_payment_per_request",
+            ),
+        ]
 
     def __str__(self):
         return f"Payment for request #{self.print_request.id}: {self.payment_status}"
@@ -214,7 +250,9 @@ class PrintJob(models.Model):
     printer = models.ForeignKey(Printer, on_delete=models.SET_NULL, null=True, blank=True)
     job_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_CREATED)
     created_at = models.DateTimeField(default=timezone.now)
+    started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    failure_reason = models.CharField(max_length=255, blank=True, default="")
 
     def __str__(self):
         return f"Print job for request #{self.print_request.id}: {self.job_status}"
@@ -227,8 +265,12 @@ class AuditLog(models.Model):
     EVENT_DOCUMENT_VALIDATED = "DOCUMENT_VALIDATED"
     EVENT_DOCUMENT_DELETED = "DOCUMENT_DELETED"
     EVENT_PRINT_REQUEST_CREATED = "PRINT_REQUEST_CREATED"
+    EVENT_PRINT_REQUEST_UPDATED = "PRINT_REQUEST_UPDATED"
+    EVENT_PRINT_REQUEST_CANCELLED = "PRINT_REQUEST_CANCELLED"
+    EVENT_PAYMENT_INITIATED = "PAYMENT_INITIATED"
     EVENT_PAYMENT_CONFIRMED = "PAYMENT_CONFIRMED"
     EVENT_PAYMENT_REJECTED = "PAYMENT_REJECTED"
+    EVENT_PAYMENT_NOTIFICATION_REFUSED = "PAYMENT_NOTIFICATION_REFUSED"
     EVENT_PRINT_JOB_CREATED = "PRINT_JOB_CREATED"
     EVENT_PRINT_JOB_STATUS_CHANGED = "PRINT_JOB_STATUS_CHANGED"
     EVENT_USER_MANAGED = "USER_MANAGED"
@@ -241,8 +283,12 @@ class AuditLog(models.Model):
         (EVENT_DOCUMENT_VALIDATED, "Document validated"),
         (EVENT_DOCUMENT_DELETED, "Document deleted from storage"),
         (EVENT_PRINT_REQUEST_CREATED, "Print request created"),
+        (EVENT_PRINT_REQUEST_UPDATED, "Print request updated"),
+        (EVENT_PRINT_REQUEST_CANCELLED, "Print request cancelled"),
+        (EVENT_PAYMENT_INITIATED, "Payment initiated"),
         (EVENT_PAYMENT_CONFIRMED, "Payment confirmed"),
         (EVENT_PAYMENT_REJECTED, "Payment rejected"),
+        (EVENT_PAYMENT_NOTIFICATION_REFUSED, "Payment notification refused"),
         (EVENT_PRINT_JOB_CREATED, "Print job created"),
         (EVENT_PRINT_JOB_STATUS_CHANGED, "Print job status changed"),
         (EVENT_USER_MANAGED, "User managed"),

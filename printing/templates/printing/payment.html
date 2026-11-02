@@ -1,13 +1,13 @@
 {% extends "printing/base.html" %}
 
-{% block title %}Payment Simulation - Chapify{% endblock %}
+{% block title %}Payment - Chapify{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h2 class="mb-1">Payment Simulation</h2>
+        <h2 class="mb-1">Payment</h2>
         <p class="text-muted mb-0">
-            Review the calculated print request price and simulate payment confirmation or rejection.
+            Review the calculated price and pay through the payment gateway.
         </p>
     </div>
 
@@ -24,8 +24,15 @@
             </div>
 
             <div class="card-body">
+                {% if print_request.status == "PAYMENT_REJECTED" %}
+                    <div class="alert alert-danger border">
+                        The previous payment attempt was declined by the gateway. You can try again or cancel the request.
+                    </div>
+                {% endif %}
+
                 <div class="alert alert-warning border">
-                    This prototype does not process real card data. The external payment gateway is simulated for coursework demonstration purposes.
+                    Payments are processed by a simulated external gateway (test mode). Chapify never receives card data;
+                    it only accepts payment results that carry the gateway's valid signature.
                 </div>
 
                 <table class="table table-bordered mb-4">
@@ -65,20 +72,15 @@
                     </tr>
                 </table>
 
-                <form method="post">
+                <form method="post" class="d-flex flex-wrap gap-2">
                     {% csrf_token %}
 
-                    <button type="submit" name="action" value="confirm" class="btn btn-success">
-                        Simulate successful payment
+                    <button type="submit" class="btn btn-success">
+                        {% if print_request.status == "PAYMENT_REJECTED" %}Try payment again{% else %}Pay {{ print_request.total_price }} EUR{% endif %}
                     </button>
 
-                    <button type="submit" name="action" value="reject" class="btn btn-danger">
-                        Simulate rejected payment
-                    </button>
-
-                    <a href="{% url 'request_history' %}" class="btn btn-outline-secondary">
-                        Cancel
-                    </a>
+                    <a href="{% url 'edit_print_request' print_request.id %}" class="btn btn-outline-primary">Edit settings</a>
+                    <a href="{% url 'cancel_print_request' print_request.id %}" class="btn btn-outline-danger">Cancel request</a>
                 </form>
             </div>
         </div>
@@ -106,15 +108,16 @@
                 </p>
 
                 <p class="mb-2">
-                    <strong>3. Confirm payment</strong>
+                    <strong>3. Pay</strong>
                 </p>
                 <p class="text-muted">
-                    If payment is confirmed, the system creates a print job.
+                    You are redirected to the payment gateway. Only after the gateway confirms the payment
+                    does Chapify place a print job in the queue.
                 </p>
 
                 <div class="alert alert-light border mb-0">
                     <strong>Security note:</strong><br>
-                    Chapify does not store card details. In a real deployment, payment would be handled by an external payment gateway.
+                    Chapify does not store card details. The gateway's result is verified with an HMAC-SHA256 signature before any print job is created.
                 </div>
             </div>
         </div>

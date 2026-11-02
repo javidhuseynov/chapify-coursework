@@ -21,6 +21,7 @@ db.sqlite3
 # Uploaded files
 media/
 documents/
+private_media/
 
 # Static files collected for production
 staticfiles/
