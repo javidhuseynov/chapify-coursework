@@ -24,7 +24,7 @@ class AccountBlockingTests(ChapifyTestCase):
         return response
 
     def test_blocking_sets_status_and_deactivates_account(self):
-        self.assertRedirects(self.block(), reverse("admin_users"))
+        self.assertRedirects(self.block(), reverse("admin_users"), fetch_redirect_response=False)
         self.user.refresh_from_db()
         self.assertEqual(self.user.profile.account_status, Profile.STATUS_BLOCKED)
         self.assertFalse(self.user.is_active)
