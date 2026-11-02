@@ -25,6 +25,7 @@ from .models import (
     PrintRequest,
     Profile,
 )
+from .login_protection import ThrottledAuthenticationForm
 from .permissions import IsChapifyAdmin, chapify_admin_required
 from .serializers import (
     AuditLogSerializer,
@@ -104,6 +105,7 @@ def register(request):
 
 class ChapifyLoginView(LoginView):
     template_name = "printing/login.html"
+    form_class = ThrottledAuthenticationForm  # locks out after repeated failures
 
 
 class ChapifyLogoutView(LogoutView):

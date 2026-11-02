@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from pypdf import PdfWriter
@@ -78,6 +79,11 @@ class ChapifyTestCase(TestCase):
         super().tearDownClass()
         cls._media_override.disable()
         shutil.rmtree(cls._media_dir, ignore_errors=True)
+
+    def _callSetUp(self):
+        # Login lockout counters live in the cache: every test starts clean.
+        cache.clear()
+        super()._callSetUp()
 
     def make_user(self, username="alice"):
         return User.objects.create_user(username=username, email=f"{username}@example.com", password=PASSWORD)

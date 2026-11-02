@@ -42,3 +42,11 @@ jobs:
 
       - name: Run tests
         run: python manage.py test --verbosity 2
+
+      - name: Production security settings (check --deploy)
+        env:
+          CHAPIFY_DEBUG: "False"
+          CHAPIFY_HTTPS: "True"
+          CHAPIFY_ALLOWED_HOSTS: chapify.example.org
+          CHAPIFY_SECRET_KEY: ci-deploy-check-Zq8vR2nL5tYw0mXc7HbK4sJ9dPfG3aEuV6oNiT1lQyWzB
+        run: python manage.py check --deploy --fail-level WARNING
