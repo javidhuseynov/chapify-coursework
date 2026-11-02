@@ -9,10 +9,12 @@
             <div class="card-body">
                 <h2 class="mb-3">Login</h2>
 
-                {% if form.errors %}
-                    <div class="alert alert-danger">
-                        Invalid username or password.
-                    </div>
+                {% if form.non_field_errors %}
+                    {% for error in form.non_field_errors %}
+                        <div class="alert alert-danger">{{ error }}</div>
+                    {% endfor %}
+                {% elif form.errors %}
+                    <div class="alert alert-danger">Please enter your username and password.</div>
                 {% endif %}
 
                 <form method="post">

@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 from .env import env_bool, env_int, env_list, env_str, load_env_file
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -172,3 +174,37 @@ PAYMENT_GATEWAY_SECRET = env_str(
 PAYMENT_CURRENCY = "EUR"
 PAYMENT_SESSION_MAX_AGE_SECONDS = 30 * 60
 PAYMENT_NOTIFICATION_MAX_AGE_SECONDS = 15 * 60
+
+
+# Login protection (printing/login_protection.py): lock a username + IP address
+# after this many failed attempts, for this many seconds.
+LOGIN_FAILURE_LIMIT = env_int("CHAPIFY_LOGIN_FAILURE_LIMIT", 5)
+LOGIN_LOCKOUT_SECONDS = env_int("CHAPIFY_LOGIN_LOCKOUT_SECONDS", 15 * 60)
+
+# Sessions end after 8 hours or when the browser is closed.
+SESSION_COOKIE_AGE = 8 * 60 * 60
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+X_FRAME_OPTIONS = "DENY"
+
+
+# Production safety. With DEBUG off, refuse to start with the public
+# development secrets from this file.
+if not DEBUG:
+    if SECRET_KEY.startswith("django-insecure") or "change-me" in PAYMENT_GATEWAY_SECRET:
+        raise ImproperlyConfigured(
+            "Set CHAPIFY_SECRET_KEY and CHAPIFY_PAYMENT_GATEWAY_SECRET in .env before running with DEBUG off."
+        )
+
+# HTTPS-only settings for a deployment behind TLS (set CHAPIFY_HTTPS=True).
+# Checked with "python manage.py check --deploy" (also in CI).
+if env_bool("CHAPIFY_HTTPS", False):
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    # HSTS preloading is a permanent commitment for a whole domain; it is
+    # deliberately not enabled for this project, so its reminder is silenced.
+    SILENCED_SYSTEM_CHECKS = ["security.W021"]
+    # Behind a reverse proxy that terminates TLS:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
