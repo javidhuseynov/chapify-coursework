@@ -22,11 +22,13 @@ from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from .models import (
     AuditLog,
     Document,
+    Profile,
     PaymentTransaction,
     Printer,
     PrintJob,
@@ -53,6 +55,9 @@ ALLOWED_TRANSITIONS = {
     PrintRequest.STATUS_PAYMENT_CONFIRMED: {
         PrintRequest.STATUS_COMPLETED,
         PrintRequest.STATUS_FAILED,
+    },
+    PrintRequest.STATUS_FAILED: {
+        PrintRequest.STATUS_PAYMENT_CONFIRMED,  # administrator retries the print job
     },
 }
 
@@ -384,7 +389,7 @@ def apply_payment_notification(data):
         .select_related("print_request")
         .filter(reference=reference)
         .first()
-        if _is_uuid(reference)
+        if is_uuid(reference)
         else None
     )
 
@@ -471,7 +476,7 @@ def apply_payment_notification(data):
     return PaymentOutcome(payment, result)
 
 
-def _is_uuid(value):
+def is_uuid(value):
     try:
         uuid.UUID(value)
     except (ValueError, TypeError, AttributeError):
@@ -600,13 +605,150 @@ def finish_print_job(job, success, failure_reason="", actor=None):
             user=actor,
             print_request=print_request,
         )
-        _delete_document_file(
-            print_request,
-            actor,
-            "print job completed" if success else "print job failed",
-        )
+        if success:
+            _delete_document_file(print_request, actor, "print job completed")
+        # A failed job keeps its file so that an administrator can retry it;
+        # cleanup_documents removes it after the retention period.
 
     return job
+
+
+def retry_print_job(job, actor):
+    """Administrator action: put a FAILED job back into the queue."""
+    with transaction.atomic():
+        job = PrintJob.objects.select_related("print_request__document").get(pk=job.pk)
+
+        if job.job_status != PrintJob.STATUS_FAILED:
+            raise WorkflowError(f"Print job #{job.pk} has not failed, so it cannot be retried.")
+
+        if not job.print_request.document.has_file():
+            raise WorkflowError(
+                f"Print job #{job.pk} cannot be retried: the document file is no longer available."
+            )
+
+        updated = PrintJob.objects.filter(pk=job.pk, job_status=PrintJob.STATUS_FAILED).update(
+            job_status=PrintJob.STATUS_QUEUED,
+            started_at=None,
+            completed_at=None,
+            failure_reason="",
+        )
+        if not updated:
+            raise WorkflowError(f"Print job #{job.pk} has not failed, so it cannot be retried.")
+
+        transition(job.print_request, PrintRequest.STATUS_PAYMENT_CONFIRMED)
+        audit(
+            AuditLog.EVENT_PRINT_JOB_STATUS_CHANGED,
+            f"Print job #{job.pk} re-queued by administrator {actor.username} (FAILED -> QUEUED).",
+            user=actor,
+            print_request=job.print_request,
+        )
+
+    job.refresh_from_db()
+    return job
+
+
+# ---------------------------------------------------------------------------
+# Administration: accounts and printers
+# ---------------------------------------------------------------------------
+
+def set_account_status(target_user, new_status, actor):
+    """Block or unblock an account (FR-13). Blocked users cannot sign in."""
+    if new_status not in (Profile.STATUS_ACTIVE, Profile.STATUS_BLOCKED):
+        raise WorkflowError("Unknown account status.")
+
+    if target_user.pk == actor.pk:
+        raise WorkflowError("You cannot change the status of your own account.")
+
+    with transaction.atomic():
+        profile, _ = Profile.objects.get_or_create(user=target_user)
+        old_status = profile.account_status
+
+        if old_status == new_status:
+            return profile
+
+        profile.account_status = new_status
+        profile.save()  # signals.sync_account_status updates user.is_active
+
+        if new_status != Profile.STATUS_ACTIVE:
+            from rest_framework.authtoken.models import Token
+
+            Token.objects.filter(user=target_user).delete()
+
+        audit(
+            AuditLog.EVENT_USER_MANAGED,
+            f"Administrator {actor.username} changed account status of {target_user.username}: "
+            f"{old_status} -> {new_status}.",
+            user=actor,
+        )
+
+    return profile
+
+
+def set_role(target_user, new_role, actor):
+    if new_role not in (Profile.ROLE_USER, Profile.ROLE_ADMIN):
+        raise WorkflowError("Unknown role.")
+
+    if target_user.pk == actor.pk:
+        raise WorkflowError("You cannot change your own role.")
+
+    with transaction.atomic():
+        profile, _ = Profile.objects.get_or_create(user=target_user)
+        old_role = profile.role
+
+        if old_role == new_role:
+            return profile
+
+        profile.role = new_role
+        profile.save(update_fields=["role"])
+        audit(
+            AuditLog.EVENT_USER_MANAGED,
+            f"Administrator {actor.username} changed role of {target_user.username}: {old_role} -> {new_role}.",
+            user=actor,
+        )
+
+    return profile
+
+
+MANUAL_PRINTER_STATUSES = (Printer.STATUS_AVAILABLE, Printer.STATUS_OFFLINE, Printer.STATUS_ERROR)
+
+
+def set_printer_status(printer, new_status, actor):
+    if new_status not in MANUAL_PRINTER_STATUSES:
+        raise WorkflowError("A printer can only be set to Available, Offline or Error.")
+
+    with transaction.atomic():
+        old_status = printer.printer_status
+        updated = Printer.objects.filter(pk=printer.pk).exclude(
+            printer_status=Printer.STATUS_BUSY
+        ).update(printer_status=new_status)
+
+        if not updated:
+            raise WorkflowError(f"{printer.printer_name} is printing a job right now; try again in a moment.")
+
+        audit(
+            AuditLog.EVENT_ADMIN_ACTION,
+            f"Administrator {actor.username} changed printer {printer.printer_name}: {old_status} -> {new_status}.",
+            user=actor,
+        )
+
+    printer.refresh_from_db()
+    return printer
+
+
+def add_printer(printer_name, location, actor):
+    printer_name = printer_name.strip()
+    location = location.strip()
+
+    if not printer_name or not location:
+        raise WorkflowError("Printer name and location are required.")
+
+    printer = Printer.objects.create(printer_name=printer_name[:100], location=location[:150])
+    audit(
+        AuditLog.EVENT_ADMIN_ACTION,
+        f"Administrator {actor.username} added printer {printer.printer_name} ({printer.location}).",
+        user=actor,
+    )
+    return printer
 
 
 def process_next_print_job(fail_rate=0.0, force_failure=False, rng=None, actor=None):
@@ -675,9 +817,11 @@ def cleanup_documents(older_than_hours=None, dry_run=False, now=None):
                     user=document.user,
                 )
 
-    # 3. Safety net: finished requests must not keep files.
+    # 3. Finished requests must not keep files. Failed requests keep theirs
+    #    for the retention period so that the job can be retried.
     finished_requests = PrintRequest.objects.filter(
-        status__in=PrintRequest.TERMINAL_STATUSES,
+        Q(status__in=[PrintRequest.STATUS_COMPLETED, PrintRequest.STATUS_CANCELLED])
+        | Q(status=PrintRequest.STATUS_FAILED, updated_at__lt=cutoff)
     ).select_related("document")
     for print_request in finished_requests:
         if print_request.document.has_file():

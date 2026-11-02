@@ -22,6 +22,9 @@
 
                 {% if is_chapify_admin %}
                     <a class="nav-link" href="{% url 'admin_dashboard' %}">Admin Dashboard</a>
+                    <a class="nav-link" href="{% url 'admin_users' %}">Users</a>
+                    <a class="nav-link" href="{% url 'admin_transactions' %}">Transactions</a>
+                    <a class="nav-link" href="{% url 'admin_printers' %}">Printers</a>
                 {% endif %}
                 {% if user.is_staff %}
                     <a class="nav-link" href="/admin/">Django Admin</a>
