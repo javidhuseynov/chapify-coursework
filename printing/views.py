@@ -1,5 +1,6 @@
 import json
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
@@ -25,7 +26,8 @@ from .models import (
     PrintRequest,
     Profile,
 )
-from .login_protection import ThrottledAuthenticationForm
+from . import rate_limits
+from .login_protection import ThrottledAuthenticationForm, client_ip
 from .permissions import IsChapifyAdmin, chapify_admin_required
 from .serializers import (
     AuditLogSerializer,
@@ -85,6 +87,21 @@ def home(request):
 
 def register(request):
     if request.method == "POST":
+        ip = client_ip(request)
+
+        if not rate_limits.hit(
+            "register",
+            ip,
+            settings.REGISTRATION_LIMIT_PER_IP,
+            settings.REGISTRATION_LIMIT_WINDOW_SECONDS,
+        ):
+            services.audit(
+                AuditLog.EVENT_REGISTRATION_REFUSED,
+                f"Registration refused: too many attempts from {ip}.",
+            )
+            messages.error(request, "Too many registration attempts from your network. Please try again later.")
+            return render(request, "printing/register.html", {"form": RegisterForm()}, status=429)
+
         form = RegisterForm(request.POST)
 
         if form.is_valid():
@@ -97,6 +114,12 @@ def register(request):
             login(request, user)  # LOGIN_SUCCESS is logged by printing.signals
 
             return redirect("home")
+
+        if form.bot_suspected:
+            services.audit(
+                AuditLog.EVENT_REGISTRATION_REFUSED,
+                f"Registration refused by bot protection (honeypot or fill time) from {ip}.",
+            )
     else:
         form = RegisterForm()
 

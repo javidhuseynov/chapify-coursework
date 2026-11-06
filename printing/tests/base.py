@@ -12,6 +12,7 @@ from pypdf import PdfWriter
 
 from mockgateway import signing
 from printing import services
+from printing.forms import registration_form_token
 from printing.models import PaymentTransaction
 from printing.validators import inspect_uploaded_document
 
@@ -57,6 +58,22 @@ def sign_notification(payment, status="APPROVED", **overrides):
     data.update(overrides)
     issued_at = data.pop("issued_at", None)
     return signing.sign(data, settings.PAYMENT_GATEWAY_SECRET, issued_at=issued_at)
+
+
+def registration_data(username="newbie", seconds_ago=30, **overrides):
+    """POST data for the registration form, as a person would submit it."""
+    import time
+
+    data = {
+        "username": username,
+        "email": f"{username}@example.com",
+        "password1": PASSWORD,
+        "password2": PASSWORD,
+        "website": "",
+        "form_started": registration_form_token(time.time() - seconds_ago),
+    }
+    data.update(overrides)
+    return data
 
 
 def query_param(url, name):

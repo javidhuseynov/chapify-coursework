@@ -9,8 +9,19 @@
             <div class="card-body">
                 <h2 class="mb-3">Create account</h2>
 
+                {% for error in form.non_field_errors %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                {% endfor %}
+
                 <form method="post">
                     {% csrf_token %}
+                    {{ form.form_started }}
+
+                    {# Honeypot: hidden from people, filled in by simple bots. #}
+                    <div class="d-none" aria-hidden="true">
+                        {{ form.website.label_tag }}
+                        {{ form.website }}
+                    </div>
 
                     <div class="mb-3">
                         {{ form.username.label_tag }}

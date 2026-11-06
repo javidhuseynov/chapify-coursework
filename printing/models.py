@@ -270,6 +270,7 @@ class AuditLog(models.Model):
     EVENT_LOGIN_FAILED = "LOGIN_FAILED"
     EVENT_LOGOUT = "LOGOUT"
     EVENT_ACCOUNT_REGISTERED = "ACCOUNT_REGISTERED"
+    EVENT_REGISTRATION_REFUSED = "REGISTRATION_REFUSED"
     EVENT_DOCUMENT_UPLOADED = "DOCUMENT_UPLOADED"
     EVENT_DOCUMENT_VALIDATED = "DOCUMENT_VALIDATED"
     EVENT_DOCUMENT_DELETED = "DOCUMENT_DELETED"
@@ -290,6 +291,7 @@ class AuditLog(models.Model):
         (EVENT_LOGIN_FAILED, "Login failed"),
         (EVENT_LOGOUT, "Logout"),
         (EVENT_ACCOUNT_REGISTERED, "Account registered"),
+        (EVENT_REGISTRATION_REFUSED, "Registration refused (bot protection)"),
         (EVENT_DOCUMENT_UPLOADED, "Document uploaded"),
         (EVENT_DOCUMENT_VALIDATED, "Document validated"),
         (EVENT_DOCUMENT_DELETED, "Document deleted from storage"),

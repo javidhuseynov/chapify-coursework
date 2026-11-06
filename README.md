@@ -16,7 +16,7 @@ print queue, payments, printers and the audit log.
 - **Stack:** Python 3.12+, Django 6.0, Django REST Framework, SQLite, Bootstrap 5.
 
 **Documentation:** [User guide](docs/USER_GUIDE.md) · [Administrator guide](docs/ADMIN_GUIDE.md) ·
-[Requirement-to-test traceability](docs/TRACEABILITY.md). This README is the developer guide.
+[Requirement-to-test traceability](docs/TRACEABILITY.md) · [Security checklist](docs/SECURITY_CHECKLIST.md). This README is the developer guide.
 
 The course-work version of June 2026 is tagged `coursework-baseline`; everything after that tag
 is bachelor's-thesis work (`git log coursework-baseline..HEAD`).
@@ -136,7 +136,10 @@ No endpoint lets a user confirm a payment. Chapify never sees card data.
 Other protections: login lockout after 5 failed attempts per username + IP for 15 minutes (web
 and API), sessions expire after 8 hours or at browser close, Chapify refuses to start with
 `DEBUG` off and the development secrets, and `CHAPIFY_HTTPS=True` enables HTTPS-only cookies,
-redirect and HSTS. CI checks that configuration with `check --deploy`. Details and the matching
+redirect and HSTS. CI checks that configuration with `check --deploy`. Every response carries a
+strict Content-Security-Policy and Permissions-Policy; registration has bot protection (honeypot,
+minimum fill time, per-IP limit); requests over 6 MB are refused before being read; CI scans
+dependencies with `pip-audit` and Dependabot proposes updates weekly. Details and the matching
 tests: [docs/TRACEABILITY.md](docs/TRACEABILITY.md).
 
 ## 5. Roles and administration

@@ -237,15 +237,9 @@ class AuthenticationAuditTests(ChapifyTestCase):
         )
 
     def test_registration_is_logged_once(self):
-        self.client.post(
-            reverse("register"),
-            {
-                "username": "newbie",
-                "email": "newbie@example.com",
-                "password1": PASSWORD,
-                "password2": PASSWORD,
-            },
-        )
+        from .base import registration_data
+
+        self.client.post(reverse("register"), registration_data("newbie"))
         user = User.objects.get(username="newbie")
         self.assertEqual(AuditLog.objects.filter(event_type=AuditLog.EVENT_ACCOUNT_REGISTERED, user=user).count(), 1)
         self.assertEqual(AuditLog.objects.filter(event_type=AuditLog.EVENT_LOGIN_SUCCESS, user=user).count(), 1)
