@@ -296,7 +296,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: var(--space-5) 0; }
   border-bottom: 1px dashed var(--rule);
   margin-bottom: var(--space-4);
 }
-.slip-title { font-family: var(--font-display); font-size: var(--t-lg); font-weight: 600; overflow-wrap: anywhere; }
+.slip-title { font-family: var(--font-display); font-size: var(--t-lg); font-weight: 600; overflow-wrap: break-word; }
 .slip-id { font-family: var(--font-display); color: var(--ink-3); font-size: var(--t-sm); }
 .slip-price { font-family: var(--font-display); font-size: var(--t-2xl); font-variant-numeric: tabular-nums; line-height: 1; }
 .slip-price small { font-size: var(--t-sm); color: var(--ink-2); margin-left: 2px; }
@@ -734,7 +734,8 @@ table.kv td { padding: var(--space-2) 0; overflow-wrap: anywhere; }
   .auth-intro h1 { margin-top: var(--space-4); font-size: var(--t-2xl); }
   .auth-intro .auth-steps, .auth-target { display: none; }
   .figure + .figure { border-left: 0; }
-  .slip-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .slip-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
+  .slip-row .status { justify-self: start; }
   .slip-row .slip-row-price { display: none; }
 }
 
