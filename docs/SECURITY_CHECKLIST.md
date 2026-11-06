@@ -24,7 +24,7 @@ Status: **Present** (implemented before this review), **Added** (implemented in 
 | 15 | Escape user content | Present + **Added** | Django template auto-escaping, no `|safe`; `mark_safe` is used once, for a constant `aria-current` attribute with no user input (`printing/templatetags/chapify.py`). **Added:** strict Content-Security-Policy as a second layer (no inline scripts or styles allowed) | `test_security_hardening.SecurityHeaderTests` |
 | 16 | Restrict file uploads | Present + **Added** | PDF only, signature + parser check, 5 MB, 500 pages, no passwords; stored outside any web-served folder. **Added:** requests over 6 MB are refused with HTTP 413 *before* being read | `test_documents.InspectDocumentTests`, `test_security_hardening.RequestSizeLimitTests` |
 | 17 | Trim API responses | Present + **Added** | Serializers expose explicit fields only (no storage paths, no password data); admin data only for admins. **Added:** with `DEBUG=False` the API returns JSON only (no browsable HTML API) | `printing/serializers.py`, `chapify/settings.py` |
-| 18 | Add security headers | Present + **Added** | Present: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, HSTS in HTTPS mode. **Added:** `Content-Security-Policy` (Django 6.0 built-in), `Permissions-Policy`, Subresource Integrity on the Bootstrap CDN stylesheet | `test_security_hardening.SecurityHeaderTests` |
+| 18 | Add security headers | Present + **Added** | Present: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, HSTS in HTTPS mode. **Added:** `Content-Security-Policy` (Django built-in, scripts and styles from the app's own origin only, no CDN), `Permissions-Policy` | `test_security_hardening.SecurityHeaderTests` |
 | 19 | Force HTTPS | Present | `CHAPIFY_HTTPS=True`: HTTPS redirect, secure cookies, HSTS; verified by `check --deploy` in CI | CI step "Production security settings" |
 | 20 | Scan dependencies | **Added** + Manual | `pip-audit` checks `requirements.txt` against known vulnerabilities in CI; Dependabot opens weekly update pull requests (pip and GitHub Actions). Dependabot alerts must be switched on in repository settings | `.github/workflows/tests.yml`, `.github/dependabot.yml` |
 
@@ -35,6 +35,10 @@ Django 6.0.6, djangorestframework 3.17.1, sqlparse 0.5.5 and pypdf 6.21.0. They 
 fixed releases (Django 6.0.8, djangorestframework 3.18.2, sqlparse 0.6.0, pypdf 6.21.4); the full
 test suite passed unchanged and the next scan reported no known vulnerabilities. This shows why the
 scan runs on every pull request: pinned versions silently become vulnerable over time.
+
+Dependabot updates are applied in batches and tested together on the current code before merging
+(November 2026: Django 6.1.2, djangorestframework 3.18.3, asgiref 3.13.0, sqlparse 0.6.1, tzdata 2026.6,
+`actions/checkout` v7 and `actions/setup-python` v7).
 
 ## Owner actions (repository settings)
 

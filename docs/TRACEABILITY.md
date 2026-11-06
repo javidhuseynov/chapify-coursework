@@ -58,7 +58,7 @@ Links every functional (FR) and non-functional (NFR) requirement from the thesis
 | Malicious or fake uploads | PDF signature, parser, size and page limits | `test_documents.InspectDocumentTests.*` |
 | Documents kept longer than needed | Deletion on completion/cancel, retention command | `test_printing_and_retention.RetentionTests.*` |
 | Insecure production configuration | Start-up guard for development secrets; `check --deploy` in CI | CI step "Production security settings" |
-| Script/style injection, clickjacking | Content-Security-Policy, X-Frame-Options, Subresource Integrity on the CDN stylesheet | `test_security_hardening.SecurityHeaderTests.*` |
+| Script/style injection, clickjacking | Content-Security-Policy (own origin only, no CDN), X-Frame-Options | `test_security_hardening.SecurityHeaderTests.*` |
 | Automated sign-ups | Honeypot, signed fill-time check, per-IP registration limit | `test_security_hardening.RegistrationBotProtectionTests.*` |
 | Huge uploads exhausting disk/memory | 413 for bodies over 6 MB before reading | `test_security_hardening.RequestSizeLimitTests.*` |
 | Vulnerable dependencies | `pip-audit` in CI, Dependabot weekly updates | CI step "Scan dependencies" |
