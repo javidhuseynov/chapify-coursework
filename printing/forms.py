@@ -91,7 +91,9 @@ class RegisterForm(UserCreationForm):
         except signing.BadSignature:  # also covers expired timestamps
             self._refuse_bot()
 
-        if time.time() - started_at < settings.REGISTRATION_MIN_FILL_SECONDS:
+        elapsed = time.time() - started_at
+
+        if elapsed < settings.REGISTRATION_MIN_FILL_SECONDS or elapsed > settings.REGISTRATION_FORM_MAX_AGE_SECONDS:
             self._refuse_bot()
 
         return cleaned_data
