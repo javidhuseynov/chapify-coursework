@@ -28,6 +28,14 @@ Status: **Present** (implemented before this review), **Added** (implemented in 
 | 19 | Force HTTPS | Present | `CHAPIFY_HTTPS=True`: HTTPS redirect, secure cookies, HSTS; verified by `check --deploy` in CI | CI step "Production security settings" |
 | 20 | Scan dependencies | **Added** + Manual | `pip-audit` checks `requirements.txt` against known vulnerabilities in CI; Dependabot opens weekly update pull requests (pip and GitHub Actions). Dependabot alerts must be switched on in repository settings | `.github/workflows/tests.yml`, `.github/dependabot.yml` |
 
+## Dependency scan result
+
+The first `pip-audit` run (6 November 2026) found **34 published advisories in 4 pinned packages**:
+Django 6.0.6, djangorestframework 3.17.1, sqlparse 0.5.5 and pypdf 6.21.0. They were upgraded to the
+fixed releases (Django 6.0.8, djangorestframework 3.18.2, sqlparse 0.6.0, pypdf 6.21.4); the full
+test suite passed unchanged and the next scan reported no known vulnerabilities. This shows why the
+scan runs on every pull request: pinned versions silently become vulnerable over time.
+
 ## Owner actions (repository settings)
 
 GitHub → repository **Settings** → **Advanced Security** (called *Code security* in some accounts):
