@@ -36,7 +36,7 @@
             <div class="card-body">
                 <table class="table table-bordered mb-0">
                     <tr>
-                        <th style="width: 35%;">Request ID</th>
+                        <th class="w-25">Request ID</th>
                         <td>#{{ print_request.id }}</td>
                     </tr>
                     <tr>
@@ -92,7 +92,7 @@
                 {% if payment_transaction %}
                     <table class="table table-bordered mb-0">
                         <tr>
-                            <th style="width: 35%;">Payment status</th>
+                            <th class="w-25">Payment status</th>
                             <td>
                                 {% if payment_transaction.payment_status == "CONFIRMED" %}
                                     <span class="badge bg-success">{{ payment_transaction.get_payment_status_display }}</span>
@@ -145,7 +145,7 @@
         {% if print_job %}
             <table class="table table-bordered mb-0">
                 <tr>
-                    <th style="width: 20%;">Print job status</th>
+                    <th class="w-25">Print job status</th>
                     <td>
                         {% if print_job.job_status == "COMPLETED" %}
                             <span class="badge bg-success">{{ print_job.get_job_status_display }}</span>

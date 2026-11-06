@@ -43,6 +43,12 @@ jobs:
       - name: Run tests
         run: python manage.py test --verbosity 2
 
+      - name: Scan dependencies for known vulnerabilities (pip-audit)
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
       - name: Production security settings (check --deploy)
         env:
           CHAPIFY_DEBUG: "False"

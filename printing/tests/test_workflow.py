@@ -20,15 +20,9 @@ class ProfileTests(ChapifyTestCase):
         self.assertEqual(admin.profile.role, Profile.ROLE_ADMIN)
 
     def test_registration_creates_profile(self):
-        response = self.client.post(
-            reverse("register"),
-            {
-                "username": "newbie",
-                "email": "newbie@example.com",
-                "password1": "Str0ng-test-pass!",
-                "password2": "Str0ng-test-pass!",
-            },
-        )
+        from .base import registration_data
+
+        response = self.client.post(reverse("register"), registration_data("newbie"))
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Profile.objects.filter(user__username="newbie", role=Profile.ROLE_USER).exists())
 

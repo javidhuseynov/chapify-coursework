@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
+from django.utils.csp import CSP
 
 from .env import env_bool, env_int, env_list, env_str, load_env_file
 
@@ -57,6 +58,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'printing.security.RequestSizeLimitMiddleware',
+    'django.middleware.csp.ContentSecurityPolicyMiddleware',
+    'printing.security.PermissionsPolicyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -152,7 +156,20 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.TokenAuthentication",
     ],
+    # General API rate limits (per IP for anonymous clients, per user otherwise).
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/minute",
+        "user": "300/minute",
+    },
 }
+
+if not DEBUG:
+    # In production the API answers in JSON only (no browsable HTML API pages).
+    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = ["rest_framework.renderers.JSONRenderer"]
 
 
 # Uploaded documents. Stored outside any web-served folder; Chapify never
@@ -208,3 +225,30 @@ if env_bool("CHAPIFY_HTTPS", False):
     SILENCED_SYSTEM_CHECKS = ["security.W021"]
     # Behind a reverse proxy that terminates TLS:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+
+# Requests larger than this are refused with HTTP 413 before they are read
+# (printing/security.py). 5 MB document + form overhead.
+MAX_REQUEST_BODY_BYTES = 6 * 1024 * 1024
+
+# Registration bot protection (printing/forms.py, printing/views.py).
+REGISTRATION_MIN_FILL_SECONDS = 3          # humans need longer than this to fill the form
+REGISTRATION_FORM_MAX_AGE_SECONDS = 24 * 60 * 60
+REGISTRATION_LIMIT_PER_IP = 10             # registration attempts per IP address...
+REGISTRATION_LIMIT_WINDOW_SECONDS = 60 * 60  # ...per hour
+
+# Content-Security-Policy (Django 6.0 built-in). Chapify uses no JavaScript of
+# its own and no inline styles; the only external resource is Bootstrap's CSS
+# from jsDelivr (pinned with Subresource Integrity in the templates).
+SECURE_CSP = {
+    "default-src": [CSP.SELF],
+    "script-src": [CSP.SELF],            # Django admin's own static scripts only
+    "style-src": [CSP.SELF, "https://cdn.jsdelivr.net"],
+    "img-src": [CSP.SELF, "data:"],      # Bootstrap uses data: SVG icons
+    "font-src": [CSP.SELF],
+    "connect-src": [CSP.SELF],
+    "object-src": [CSP.NONE],
+    "base-uri": [CSP.NONE],
+    "form-action": [CSP.SELF],
+    "frame-ancestors": [CSP.NONE],
+}
