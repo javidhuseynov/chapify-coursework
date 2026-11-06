@@ -1,0 +1,20 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>You don't have access to this page – Chapify</title>
+  <link rel="icon" href="{% static 'chapify/favicon.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'chapify/app.css' %}">
+</head>
+<body>
+  <main class="error-page">
+    <div class="slip"><span class="crop"></span>
+      <div class="error-code">403</div>
+      <h1>You don't have access to this page</h1>
+      <p class="muted">This page is only available to other accounts. If you think this is a mistake, contact the library desk.</p>
+      <a class="btn btn-primary" href="/">Go to Chapify</a>
+    </div>
+  </main>
+</body>
+</html>

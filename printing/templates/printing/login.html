@@ -1,40 +1,32 @@
 {% extends "printing/base.html" %}
 
-{% block title %}Login - Chapify{% endblock %}
+{% block title %}Log in{% endblock %}
 
-{% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-5">
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <h2 class="mb-3">Login</h2>
-
-                {% if form.non_field_errors %}
-                    {% for error in form.non_field_errors %}
-                        <div class="alert alert-danger">{{ error }}</div>
-                    {% endfor %}
-                {% elif form.errors %}
-                    <div class="alert alert-danger">Please enter your username and password.</div>
-                {% endif %}
-
-                <form method="post">
-                    {% csrf_token %}
-
-                    <div class="mb-3">
-                        {{ form.username.label_tag }}
-                        {{ form.username }}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form.password.label_tag }}
-                        {{ form.password }}
-                    </div>
-
-                    <button type="submit" class="btn btn-dark">Login</button>
-                    <a href="{% url 'register' %}" class="btn btn-outline-secondary">Create account</a>
-                </form>
-            </div>
+{% block body %}
+<div class="auth">
+  {% include "printing/partials/auth_intro.html" %}
+  <section class="auth-form">
+    <div class="auth-card">
+      <h2>Log in</h2>
+      {% include "printing/partials/messages.html" %}
+      {% for error in form.non_field_errors %}
+        <div class="notice notice-error" role="alert">{{ error }}</div>
+      {% endfor %}
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <div class="field">
+          <label for="id_username">Username</label>
+          <input type="text" name="username" id="id_username" autocomplete="username" autocapitalize="none" required value="{{ form.username.value|default:'' }}" autofocus>
         </div>
+        <div class="field">
+          <label for="id_password">Password</label>
+          <input type="password" name="password" id="id_password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg btn-block">Log in</button>
+      </form>
+      <p class="auth-switch">New to Chapify? <a href="{% url 'register' %}">Create an account</a></p>
     </div>
+  </section>
 </div>
 {% endblock %}

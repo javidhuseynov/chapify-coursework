@@ -29,12 +29,32 @@ class DocumentUploadForm(forms.ModelForm):
         return uploaded_file
 
 
+MAX_COPIES = 100
+
+
 class PrintSettingsForm(forms.ModelForm):
     # The number of pages is not a form field: it is counted from the PDF.
 
     class Meta:
         model = PrintSettings
         fields = ["copies", "color_mode", "paper_format", "duplex_mode"]
+        widgets = {
+            "copies": forms.NumberInput(attrs={"min": 1, "max": MAX_COPIES, "inputmode": "numeric"}),
+            "color_mode": forms.RadioSelect,
+            "paper_format": forms.RadioSelect,
+            "duplex_mode": forms.RadioSelect,
+        }
+
+    def clean_copies(self):
+        copies = self.cleaned_data["copies"]
+
+        if copies < 1:
+            raise forms.ValidationError("Choose at least 1 copy.")
+
+        if copies > MAX_COPIES:
+            raise forms.ValidationError(f"At most {MAX_COPIES} copies per request. For larger runs, ask the desk.")
+
+        return copies
 
 
 REGISTRATION_FORM_SALT = "chapify.registration-form"

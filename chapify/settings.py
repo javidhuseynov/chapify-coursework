@@ -142,6 +142,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+# "python manage.py collectstatic" copies all static files here for a web server.
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"
@@ -237,14 +239,13 @@ REGISTRATION_FORM_MAX_AGE_SECONDS = 24 * 60 * 60
 REGISTRATION_LIMIT_PER_IP = 10             # registration attempts per IP address...
 REGISTRATION_LIMIT_WINDOW_SECONDS = 60 * 60  # ...per hour
 
-# Content-Security-Policy (Django 6.0 built-in). Chapify uses no JavaScript of
-# its own and no inline styles; the only external resource is Bootstrap's CSS
-# from jsDelivr (pinned with Subresource Integrity in the templates).
+# Content-Security-Policy (Django 6.0 built-in). All CSS, JavaScript and icons
+# are served by Chapify itself; no inline scripts or styles, no third parties.
 SECURE_CSP = {
     "default-src": [CSP.SELF],
-    "script-src": [CSP.SELF],            # Django admin's own static scripts only
-    "style-src": [CSP.SELF, "https://cdn.jsdelivr.net"],
-    "img-src": [CSP.SELF, "data:"],      # Bootstrap uses data: SVG icons
+    "script-src": [CSP.SELF],
+    "style-src": [CSP.SELF],
+    "img-src": [CSP.SELF, "data:"],
     "font-src": [CSP.SELF],
     "connect-src": [CSP.SELF],
     "object-src": [CSP.NONE],

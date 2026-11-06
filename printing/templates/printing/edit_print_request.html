@@ -1,100 +1,27 @@
 {% extends "printing/base.html" %}
 
-{% block title %}Edit Print Request{% endblock %}
+{% block title %}Change settings{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1>Edit Print Request #{{ print_request.id }}</h1>
-            <p class="text-muted">Modify print settings before payment is processed.</p>
-        </div>
+<div class="page-head">
+  <div>
+    <h1>Change settings</h1>
+    <p>{{ print_request.document.file_name }}, {{ print_request.document_pages }} page{{ print_request.document_pages|pluralize }}. Request #{{ print_request.id }}</p>
+  </div>
+</div>
 
-        <a href="{% url 'request_status' print_request.id %}" class="btn btn-outline-secondary">
-            Back to Request Status
-        </a>
+<div class="grid grid-main-side">
+  <form method="post" class="sheet" data-price-form novalidate>
+    {% csrf_token %}
+    {% include "printing/partials/settings_fields.html" with pages=print_request.document_pages %}
+    <div class="btn-row">
+      <button type="submit" class="btn btn-primary btn-lg">Save and continue to payment</button>
+      <a class="btn btn-quiet" href="{% url 'request_status' print_request.id %}">Keep current settings</a>
     </div>
-
-    <div class="row">
-        <div class="col-lg-7">
-            <div class="card shadow-sm">
-                <div class="card-header bg-dark text-white">
-                    <h4 class="mb-0">Edit Print Settings</h4>
-                </div>
-
-                <div class="card-body">
-                    <p>
-                        Document:
-                        <strong>{{ print_request.document.file_name }}</strong>
-                    </p>
-
-                    <p>
-                        Pages:
-                        <strong>{{ print_request.document_pages }}</strong>
-                        <span class="text-muted small">(counted from the PDF, cannot be changed)</span>
-                    </p>
-
-                    <p>
-                        Current price:
-                        <strong>{{ print_request.total_price }} EUR</strong>
-                    </p>
-
-                    <form method="post">
-                        {% csrf_token %}
-
-                        {% for field in form %}
-                            <div class="mb-3">
-                                <label class="form-label" for="{{ field.id_for_label }}">
-                                    {{ field.label }}
-                                </label>
-
-                                {{ field }}
-
-                                {% if field.help_text %}
-                                    <div class="form-text">{{ field.help_text }}</div>
-                                {% endif %}
-
-                                {% for error in field.errors %}
-                                    <div class="text-danger">{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                        {% endfor %}
-
-                        <button type="submit" class="btn btn-dark">
-                            Save Changes and Recalculate Price
-                        </button>
-
-                        <a href="{% url 'request_status' print_request.id %}" class="btn btn-outline-secondary">
-                            Cancel
-                        </a>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-5">
-            <div class="card shadow-sm">
-                <div class="card-header bg-dark text-white">
-                    <h4 class="mb-0">Editing Rules</h4>
-                </div>
-
-                <div class="card-body">
-                    <p>
-                        This request can be edited because it is still awaiting payment.
-                    </p>
-
-                    <ol>
-                        <li>Change copies, color mode, paper format, or duplex mode.</li>
-                        <li>The system recalculates the total price.</li>
-                        <li>After saving, the request returns to the payment step.</li>
-                    </ol>
-
-                    <p class="text-muted mb-0">
-                        Requests can be edited until a payment is confirmed. Editing cancels any unfinished payment attempt, because the price may change.
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
+  </form>
+  <aside class="sheet">
+    <h3>Good to know</h3>
+    <p class="small muted">The page count comes from your PDF and cannot be changed. If you had already opened the payment page, that payment is cancelled because the price may change.</p>
+  </aside>
 </div>
 {% endblock %}

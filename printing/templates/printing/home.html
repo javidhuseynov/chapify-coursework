@@ -1,41 +1,48 @@
 {% extends "printing/base.html" %}
 
-{% block title %}Chapify - Home{% endblock %}
+{% block title %}Home{% endblock %}
 
 {% block content %}
-<div class="row align-items-center">
-    <div class="col-md-8">
-        <h1 class="display-5 fw-bold">Chapify</h1>
-        <p class="lead">
-            Self-service printing information system with integrated micropayment functionality.
-        </p>
-
-        <p>
-            Chapify allows users to upload documents, select print settings,
-            calculate the price, pay through the (test-mode) payment gateway, and track the print job.
-        </p>
-
-        <div class="mt-4">
-            <a href="/admin/" class="btn btn-dark">Open Admin Panel</a>
-            <a href="{% url 'upload_document' %}" class="btn btn-outline-secondary">Start Print Request</a>
-        </div>
-    </div>
-
-    <div class="col-md-4 mt-4 mt-md-0">
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <h5 class="card-title">Prototype functions</h5>
-                <ul class="mb-0">
-                    <li>User authentication</li>
-                    <li>Document upload</li>
-                    <li>Price calculation</li>
-                    <li>Gateway payment (test mode)</li>
-                    <li>Print queue tracking</li>
-                    <li>Print job tracking</li>
-                    <li>Admin monitoring</li>
-                </ul>
-            </div>
-        </div>
-    </div>
+<div class="page-head">
+  <div>
+    <h1>Hello, {{ user.get_username }}</h1>
+    <p>{% if active_requests %}You have {{ active_requests|length }} request{{ active_requests|length|pluralize }} in progress.{% else %}Nothing is printing for you right now.{% endif %}</p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-primary btn-lg" href="{% url 'upload_document' %}">Print a document</a>
+  </div>
 </div>
+
+<dl class="figures">
+  <div class="figure"><dt>Printed pages this month</dt><dd>{{ pages_this_month }}</dd></div>
+  <div class="figure"><dt>Spent this month</dt><dd>{{ spent_this_month }} EUR</dd></div>
+  <div class="figure"><dt>Requests in total</dt><dd>{{ total_requests }}</dd></div>
+</dl>
+
+<section class="section">
+  <h2>In progress</h2>
+  {% if active_requests %}
+    <div class="slip-list">
+      {% for item in active_requests %}{% include "printing/partials/slip_row.html" %}{% endfor %}
+    </div>
+  {% else %}
+    <div class="sheet empty">
+      <h3>No open requests</h3>
+      <p>Upload a PDF to see the price before you pay. It takes about a minute.</p>
+      <a class="btn btn-primary" href="{% url 'upload_document' %}">Print a document</a>
+    </div>
+  {% endif %}
+</section>
+
+{% if recent_requests %}
+<section class="section">
+  <div class="page-head">
+    <h2>Recently finished</h2>
+    <a href="{% url 'request_history' %}">All requests</a>
+  </div>
+  <div class="slip-list">
+    {% for item in recent_requests %}{% include "printing/partials/slip_row.html" %}{% endfor %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}

@@ -1,0 +1,29 @@
+{% load chapify %}
+<nav class="nav" aria-label="Sections">
+  {% if is_chapify_admin %}
+  <div class="nav-group">
+    <p class="nav-heading">Operations</p>
+    <a href="{% url 'admin_dashboard' %}" {% current 'admin_dashboard' %}>Overview</a>
+    <a href="{% url 'admin_requests' %}" {% current 'admin_requests' %}>Requests</a>
+    <a href="{% url 'admin_printers' %}" {% current 'admin_printers' %}>Printers</a>
+  </div>
+  <div class="nav-group">
+    <p class="nav-heading">Administration</p>
+    <a href="{% url 'admin_users' %}" {% current 'admin_users' %}>Users</a>
+    <a href="{% url 'admin_transactions' %}" {% current 'admin_transactions' %}>Payments</a>
+    <a href="{% url 'admin_audit' %}" {% current 'admin_audit' %}>Audit log</a>
+    <a href="{% url 'admin_report' %}" {% current 'admin_report' %}>Reports</a>
+  </div>
+  {% else %}
+  <div class="nav-group">
+    <a href="{% url 'upload_document' %}" {% current 'upload_document' 'print_settings' %}>Print a document</a>
+    <a href="{% url 'home' %}" {% current 'home' %}>Home</a>
+    <a href="{% url 'request_history' %}" {% current 'request_history' 'request_status' 'payment' 'edit_print_request' 'cancel_print_request' %}>My requests</a>
+  </div>
+  {% endif %}
+  <div class="nav-group">
+    <a href="{% url 'account' %}" {% current 'account' %}>Account</a>
+    <a href="{% url 'help' %}" {% current 'help' %}>Prices and help</a>
+    {% if is_chapify_admin and user.is_staff %}<a href="/admin/">Database admin</a>{% endif %}
+  </div>
+</nav>

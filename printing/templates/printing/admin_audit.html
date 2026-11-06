@@ -1,0 +1,33 @@
+{% extends "printing/base.html" %}
+
+{% block title %}Audit log{% endblock %}
+
+{% block content %}
+<div class="page-head"><div><h1>Audit log</h1><p>Security and workflow events, newest first. Passwords and card data are never recorded.</p></div></div>
+
+<div class="sheet sheet-flush">
+  {% url 'admin_audit' as reset_url %}
+  {% include "printing/partials/filter_form.html" with search_label="Text in the description or username" status_label="Event" %}
+  {% if page_obj.object_list %}
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>Time</th><th>Event</th><th>User</th><th>Request</th><th>Description</th></tr></thead>
+      <tbody>
+      {% for log in page_obj %}
+        <tr>
+          <td class="nowrap">{{ log.event_timestamp|date:"j M Y, H:i:s" }}</td>
+          <td class="nowrap">{{ log.get_event_type_display }}</td>
+          <td>{{ log.user.username|default:"-" }}</td>
+          <td class="num">{% if log.print_request_id %}#{{ log.print_request_id }}{% else %}-{% endif %}</td>
+          <td>{{ log.description }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "printing/partials/pagination.html" %}
+  {% else %}
+  <div class="empty"><h3>No events found</h3><p>Change the search or event filter.</p></div>
+  {% endif %}
+</div>
+{% endblock %}

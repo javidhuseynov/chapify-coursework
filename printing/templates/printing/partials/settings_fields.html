@@ -1,0 +1,27 @@
+{% comment %}Print settings fields, shared by the new-request and edit pages.{% endcomment %}
+<div class="field{% if form.copies.errors %} has-error{% endif %}">
+  <label for="{{ form.copies.id_for_label }}">Copies</label>
+  {{ form.copies }}
+  {{ form.copies.errors }}
+</div>
+
+<fieldset class="choices field">
+  <legend>Color</legend>
+  {% for radio in form.color_mode %}<label class="choice">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>{% endfor %}
+</fieldset>
+
+<fieldset class="choices field">
+  <legend>Paper size</legend>
+  {% for radio in form.paper_format %}<label class="choice">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>{% endfor %}
+</fieldset>
+
+<fieldset class="choices field">
+  <legend>Sides</legend>
+  {% for radio in form.duplex_mode %}<label class="choice">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>{% endfor %}
+</fieldset>
+
+<div class="estimate" aria-live="polite">
+  <span class="muted">Estimated price for {{ pages }} page{{ pages|pluralize }}</span>
+  <span class="slip-price"><span data-price-estimate>{{ estimate|default:"-" }}</span><small>EUR</small></span>
+</div>
+{{ pricing_data|json_script:"pricing-data" }}

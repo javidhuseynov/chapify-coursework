@@ -1,0 +1,57 @@
+{% extends "printing/base.html" %}
+
+{% block title %}Prices and help{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Prices and help</h1>
+    <p>What printing costs and how Chapify handles your documents.</p>
+  </div>
+</div>
+
+<section class="sheet sheet-flush">
+  <div class="sheet-head"><h2>Price per printed page</h2></div>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>Paper</th><th class="num">Black and white, one-sided</th><th class="num">Black and white, double-sided</th><th class="num">Color, one-sided</th><th class="num">Color, double-sided</th></tr></thead>
+      <tbody>
+        {% for row in price_rows %}
+        <tr><td>{{ row.paper }}</td>{% for price in row.prices %}<td class="num">{{ price }} EUR</td>{% endfor %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="sheet-body small muted">
+    The total is pages × copies × page price, rounded to the cent. Example: a 10-page PDF, 2 copies, color, A4, one-sided costs {{ example_price }} EUR.
+  </div>
+</section>
+
+<section class="sheet section">
+  <h2>Questions</h2>
+  <dl class="faq">
+    <dt>Which files can I print?</dt>
+    <dd>PDF files up to {{ max_size_mb }} MB and {{ max_pages }} pages that are not password-protected. In Word or Google Docs, choose Save as PDF or Download as PDF first.</dd>
+    <dt>Why can't I change the number of pages?</dt>
+    <dd>Chapify counts the pages in your PDF so that the price is always exact.</dd>
+    <dt>When does printing start?</dt>
+    <dd>As soon as the payment provider confirms your payment, your job joins the print queue. Follow it on the request page.</dd>
+    <dt>My payment was declined. What now?</dt>
+    <dd>Open the request and choose Try payment again, or change the settings first. Nothing is charged for a declined payment.</dd>
+    <dt>My print job failed.</dt>
+    <dd>Staff are notified on their dashboard and can send the job to the printer again. Your file is kept for {{ retention_hours }} hours for this.</dd>
+    <dt>I can't log in any more.</dt>
+    <dd>After {{ login_limit }} wrong passwords, logging in from your computer is paused for {{ lockout_minutes }} minutes. If your account was blocked, contact the library desk.</dd>
+  </dl>
+</section>
+
+<section class="sheet section" id="privacy">
+  <h2>Privacy and your documents</h2>
+  <ul class="muted">
+    <li>Only you and the service staff can see your requests and payments.</li>
+    <li>Your PDF is deleted as soon as it has been printed or the request is cancelled. Unpaid requests are cancelled after {{ retention_hours }} hours and their files deleted.</li>
+    <li>Chapify never receives your card details; payments are handled by the payment provider.</li>
+    <li>For security, logins and important actions are recorded in an audit log that only staff can view.</li>
+  </ul>
+</section>
+{% endblock %}

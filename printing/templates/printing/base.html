@@ -1,60 +1,53 @@
-<!DOCTYPE html>
+{% load static chapify %}<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>{% block title %}Chapify{% endblock %}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Chapify{% endblock %} – Chapify</title>
+  <link rel="icon" href="{% static 'chapify/favicon.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'chapify/app.css' %}">
+  <script src="{% static 'chapify/app.js' %}" defer></script>
 </head>
-
-<body class="bg-light">
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container">
-        <a class="navbar-brand fw-bold" href="{% url 'home' %}">Chapify</a>
-
-        <div class="navbar-nav ms-auto">
-            <a class="nav-link" href="{% url 'home' %}">Home</a>
-
-            {% if user.is_authenticated %}
-                <a class="nav-link" href="{% url 'upload_document' %}">New Request</a>
-                <a class="nav-link" href="{% url 'request_history' %}">My History</a>
-
-                {% if is_chapify_admin %}
-                    <a class="nav-link" href="{% url 'admin_dashboard' %}">Admin Dashboard</a>
-                    <a class="nav-link" href="{% url 'admin_users' %}">Users</a>
-                    <a class="nav-link" href="{% url 'admin_transactions' %}">Transactions</a>
-                    <a class="nav-link" href="{% url 'admin_printers' %}">Printers</a>
-                {% endif %}
-                {% if user.is_staff %}
-                    <a class="nav-link" href="/admin/">Django Admin</a>
-                {% endif %}
-
-                <form method="post" action="{% url 'logout' %}" class="d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-link nav-link d-inline p-0 ms-2">
-                        Logout
-                    </button>
-                </form>
-            {% else %}
-                <a class="nav-link" href="{% url 'login' %}">Login</a>
-                <a class="nav-link" href="{% url 'register' %}">Register</a>
-            {% endif %}
-        </div>
+<body>
+{% block body %}
+<div class="shell">
+  {% comment %}Navigation depends on the role: administrators see operations, users see printing.{% endcomment %}
+  {% with nav_template="printing/partials/nav.html" %}
+  <aside class="sidebar" aria-label="Main">
+    <a class="brand" href="{% url 'home' %}">{% include "printing/partials/mark.html" %}Chapify</a>
+    {% include nav_template %}
+    <div class="sidebar-footer">
+      <span class="who">{{ user.get_username }}</span>
+      <span class="role">{% if is_chapify_admin %}Administrator{% else %}Student account{% endif %}</span>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="btn btn-sm btn-quiet">Log out</button></form>
     </div>
-</nav>
+  </aside>
 
-<main class="container py-5">
-    {% if messages %}
-        {% for message in messages %}
-            <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% else %}alert-info{% endif %}" role="alert">
-                {{ message }}
-            </div>
-        {% endfor %}
-    {% endif %}
+  <details class="mobile-bar">
+    <summary>
+      <span class="brand">{% include "printing/partials/mark.html" with size=24 %}Chapify</span>
+      <span class="menu-label">Menu</span>
+    </summary>
+    {% include nav_template %}
+    <div class="sidebar-footer">
+      <span class="who">{{ user.get_username }}</span>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="btn btn-sm">Log out</button></form>
+    </div>
+  </details>
+  {% endwith %}
 
-    {% block content %}
-    {% endblock %}
-</main>
+  <main class="main" id="main">
+    <div class="content">
+      {% include "printing/partials/messages.html" %}
+      {% block content %}{% endblock %}
+      <footer class="site-footer">
+        <span>Chapify self-service printing</span>
+        <a href="{% url 'help' %}">Prices and help</a>
+        <a href="{% url 'help' %}#privacy">Privacy</a>
+      </footer>
+    </div>
+  </main>
+</div>
+{% endblock %}
 </body>
 </html>
