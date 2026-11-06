@@ -1,126 +1,33 @@
 {% extends "printing/base.html" %}
 
-{% block title %}Payment - Chapify{% endblock %}
+{% block title %}Payment{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="mb-1">Payment</h2>
-        <p class="text-muted mb-0">
-            Review the calculated price and pay through the payment gateway.
-        </p>
-    </div>
-
-    <div>
-        <a href="{% url 'request_history' %}" class="btn btn-outline-secondary">Open my history</a>
-    </div>
+{% include "printing/partials/flow_steps.html" with step=3 %}
+<div class="page-head">
+  <div>
+    <h1>Check and pay</h1>
+    <p>You pay on the payment provider's secure page and come back here automatically.</p>
+  </div>
 </div>
 
-<div class="row">
-    <div class="col-md-7">
-        <div class="card shadow-sm">
-            <div class="card-header bg-dark text-white">
-                <h5 class="mb-0">Payment Summary</h5>
-            </div>
-
-            <div class="card-body">
-                {% if print_request.status == "PAYMENT_REJECTED" %}
-                    <div class="alert alert-danger border">
-                        The previous payment attempt was declined by the gateway. You can try again or cancel the request.
-                    </div>
-                {% endif %}
-
-                <div class="alert alert-warning border">
-                    Payments are processed by a simulated external gateway (test mode). Chapify never receives card data;
-                    it only accepts payment results that carry the gateway's valid signature.
-                </div>
-
-                <table class="table table-bordered mb-4">
-                    <tr>
-                        <th class="w-25">Request ID</th>
-                        <td>#{{ print_request.id }}</td>
-                    </tr>
-                    <tr>
-                        <th>Document</th>
-                        <td>{{ print_request.document.file_name }}</td>
-                    </tr>
-                    <tr>
-                        <th>Pages</th>
-                        <td>{{ print_request.document_pages }}</td>
-                    </tr>
-                    <tr>
-                        <th>Copies</th>
-                        <td>{{ print_request.settings.copies }}</td>
-                    </tr>
-                    <tr>
-                        <th>Color mode</th>
-                        <td>{{ print_request.settings.get_color_mode_display }}</td>
-                    </tr>
-                    <tr>
-                        <th>Paper format</th>
-                        <td>{{ print_request.settings.paper_format }}</td>
-                    </tr>
-                    <tr>
-                        <th>Duplex mode</th>
-                        <td>{{ print_request.settings.get_duplex_mode_display }}</td>
-                    </tr>
-                    <tr>
-                        <th>Total price</th>
-                        <td>
-                            <strong>{{ print_request.total_price }} EUR</strong>
-                        </td>
-                    </tr>
-                </table>
-
-                <form method="post" class="d-flex flex-wrap gap-2">
-                    {% csrf_token %}
-
-                    <button type="submit" class="btn btn-success">
-                        {% if print_request.status == "PAYMENT_REJECTED" %}Try payment again{% else %}Pay {{ print_request.total_price }} EUR{% endif %}
-                    </button>
-
-                    <a href="{% url 'edit_print_request' print_request.id %}" class="btn btn-outline-primary">Edit settings</a>
-                    <a href="{% url 'cancel_print_request' print_request.id %}" class="btn btn-outline-danger">Cancel request</a>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-5">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light">
-                <h5 class="mb-0">Workflow Step 3 of 3</h5>
-            </div>
-
-            <div class="card-body">
-                <p class="mb-2">
-                    <strong>1. Upload document</strong>
-                </p>
-                <p class="text-muted">
-                    The document was uploaded and validated.
-                </p>
-
-                <p class="mb-2">
-                    <strong>2. Select print settings</strong>
-                </p>
-                <p class="text-muted">
-                    The total price was calculated automatically.
-                </p>
-
-                <p class="mb-2">
-                    <strong>3. Pay</strong>
-                </p>
-                <p class="text-muted">
-                    You are redirected to the payment gateway. Only after the gateway confirms the payment
-                    does Chapify place a print job in the queue.
-                </p>
-
-                <div class="alert alert-light border mb-0">
-                    <strong>Security note:</strong><br>
-                    Chapify does not store card details. The gateway's result is verified with an HMAC-SHA256 signature before any print job is created.
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="grid grid-main-side">
+  <div>
+    {% if print_request.status == "PAYMENT_REJECTED" %}
+      <div class="notice notice-error">Your last payment was declined by the payment provider. You can try again or cancel the request.</div>
+    {% endif %}
+    {% include "printing/partials/slip_full.html" %}
+    <form method="post" class="btn-row section">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary btn-lg">{% if print_request.status == "PAYMENT_REJECTED" %}Try payment again{% else %}Pay {{ print_request.total_price }} EUR{% endif %}</button>
+      <a class="btn" href="{% url 'edit_print_request' print_request.id %}">Change settings</a>
+      <a class="btn btn-quiet" href="{% url 'cancel_print_request' print_request.id %}">Cancel request</a>
+    </form>
+  </div>
+  <aside class="sheet">
+    <h3>About your payment</h3>
+    <p class="small muted">Card details are entered only on the payment provider's page; Chapify never receives them. Printing starts only after the provider confirms the payment.</p>
+    <p class="small muted">Until you pay, you can still change the settings or cancel. Unpaid requests are cancelled automatically after 24 hours.</p>
+  </aside>
 </div>
 {% endblock %}

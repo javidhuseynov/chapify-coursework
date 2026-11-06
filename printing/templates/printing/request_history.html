@@ -1,134 +1,68 @@
 {% extends "printing/base.html" %}
+{% load chapify %}
 
-{% block title %}My Print Request History{% endblock %}
+{% block title %}My requests{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1>My Print Request History</h1>
-            <p class="text-muted">View, search, filter, edit, or cancel your print requests.</p>
-        </div>
+<div class="page-head">
+  <div>
+    <h1>My requests</h1>
+    <p>Everything you have sent to print.</p>
+  </div>
+  <div class="page-actions"><a class="btn btn-primary" href="{% url 'upload_document' %}">Print a document</a></div>
+</div>
 
-        <a href="{% url 'upload_document' %}" class="btn btn-dark">
-            Create New Print Request
-        </a>
+<div class="sheet sheet-flush">
+  <form method="get" class="filters" role="search">
+    <div class="field">
+      <label for="q">Search</label>
+      <input type="search" id="q" name="q" value="{{ search_query }}" placeholder="File name or request number">
     </div>
-
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-dark text-white">
-            <h4 class="mb-0">Search and Filter</h4>
-        </div>
-
-        <div class="card-body">
-            <form method="get" class="row g-3 align-items-end">
-                <div class="col-md-6">
-                    <label for="q" class="form-label">Search by request ID or document name</label>
-                    <input
-                        type="text"
-                        id="q"
-                        name="q"
-                        class="form-control"
-                        value="{{ search_query }}"
-                        placeholder="Example: 19 or report.pdf"
-                    >
-                </div>
-
-                <div class="col-md-4">
-                    <label for="status" class="form-label">Status</label>
-                    <select id="status" name="status" class="form-select">
-                        <option value="">All statuses</option>
-                        {% for value, label in status_choices %}
-                            <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>
-                                {{ label }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-dark w-100">Apply</button>
-                </div>
-            </form>
-
-            <div class="mt-3">
-                <a href="{% url 'request_history' %}" class="btn btn-outline-secondary btn-sm">
-                    Clear filters
-                </a>
-            </div>
-        </div>
+    <div class="field narrow">
+      <label for="status">Status</label>
+      <select id="status" name="status">
+        <option value="">Any status</option>
+        {% for value, label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
     </div>
+    <button type="submit" class="btn">Apply</button>
+    {% if search_query or selected_status %}<a class="btn btn-quiet" href="{% url 'request_history' %}">Clear</a>{% endif %}
+  </form>
 
-    <div class="card shadow-sm">
-        <div class="card-header bg-dark text-white">
-            <h4 class="mb-0">Requests</h4>
-        </div>
-
-        <div class="card-body">
-            {% if print_requests %}
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>ID</th>
-                                <th>Document</th>
-                                <th>Status</th>
-                                <th>Pages</th>
-                                <th>Copies</th>
-                                <th>Color</th>
-                                <th>Paper</th>
-                                <th>Duplex</th>
-                                <th>Total Price</th>
-                                <th>Created At</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            {% for request_item in print_requests %}
-                                <tr>
-                                    <td>#{{ request_item.id }}</td>
-                                    <td>{{ request_item.document.file_name }}</td>
-                                    <td>
-                                        <span class="badge bg-secondary">
-                                            {{ request_item.get_status_display }}
-                                        </span>
-                                    </td>
-                                    <td>{{ request_item.document_pages }}</td>
-                                    <td>{{ request_item.settings.copies }}</td>
-                                    <td>{{ request_item.settings.color_mode }}</td>
-                                    <td>{{ request_item.settings.paper_format }}</td>
-                                    <td>{{ request_item.settings.duplex_mode }}</td>
-                                    <td>{{ request_item.total_price }} EUR</td>
-                                    <td>{{ request_item.created_at }}</td>
-                                    <td>
-                                        <a href="{% url 'request_status' request_item.id %}" class="btn btn-outline-dark btn-sm">
-                                            View
-                                        </a>
-
-                                        {% if request_item.is_open %}
-                                            <a href="{% url 'payment' request_item.id %}" class="btn btn-outline-success btn-sm">
-                                                Pay
-                                            </a>
-
-                                            <a href="{% url 'edit_print_request' request_item.id %}" class="btn btn-outline-primary btn-sm">
-                                                Edit
-                                            </a>
-
-                                            <a href="{% url 'cancel_print_request' request_item.id %}" class="btn btn-outline-danger btn-sm">
-                                                Cancel
-                                            </a>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p class="text-muted mb-0">No print requests found.</p>
-            {% endif %}
-        </div>
-    </div>
+  {% if page_obj.object_list %}
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>Request</th><th>Document</th><th class="num">Pages</th><th class="num">Price</th><th>Status</th><th>Created</th><th></th></tr></thead>
+      <tbody>
+      {% for item in page_obj %}
+        <tr>
+          <td class="ref">#{{ item.id }}</td>
+          <td>{{ item.document.file_name }}</td>
+          <td class="num">{{ item.document_pages }} × {{ item.settings.copies }}</td>
+          <td class="num">{{ item.total_price }} EUR</td>
+          <td><span class="status status-{{ item.status|status_tone }}">{{ item.get_status_display }}</span></td>
+          <td class="nowrap">{{ item.created_at|date:"j M Y" }}</td>
+          <td class="actions">
+            {% if item.is_open %}<a class="btn btn-sm btn-primary" href="{% url 'payment' item.id %}">Pay</a>{% endif %}
+            <a class="btn btn-sm" href="{% url 'request_status' item.id %}">View</a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "printing/partials/pagination.html" %}
+  {% else %}
+  <div class="empty">
+    {% if search_query or selected_status %}
+      <h3>No requests match</h3>
+      <p>Try another search or <a href="{% url 'request_history' %}">show all requests</a>.</p>
+    {% else %}
+      <h3>No requests yet</h3>
+      <p>Your print requests will appear here.</p>
+      <a class="btn btn-primary" href="{% url 'upload_document' %}">Print a document</a>
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

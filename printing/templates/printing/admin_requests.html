@@ -1,0 +1,36 @@
+{% extends "printing/base.html" %}
+{% load chapify %}
+
+{% block title %}Requests{% endblock %}
+
+{% block content %}
+<div class="page-head"><div><h1>Requests</h1><p>All print requests from all users.</p></div></div>
+
+<div class="sheet sheet-flush">
+  {% url 'admin_requests' as reset_url %}
+  {% include "printing/partials/filter_form.html" with search_label="Request number, username or file name" %}
+  {% if page_obj.object_list %}
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>Request</th><th>User</th><th>Document</th><th class="num">Pages</th><th class="num">Price</th><th>Status</th><th>Created</th></tr></thead>
+      <tbody>
+      {% for item in page_obj %}
+        <tr>
+          <td class="ref">#{{ item.id }}</td>
+          <td>{{ item.user.username }}</td>
+          <td>{{ item.document.file_name }}</td>
+          <td class="num">{{ item.document_pages }} × {{ item.settings.copies }}</td>
+          <td class="num">{{ item.total_price }} EUR</td>
+          <td><span class="status status-{{ item.status|status_tone }}">{{ item.get_status_display }}</span></td>
+          <td class="nowrap">{{ item.created_at|date:"j M Y, H:i" }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "printing/partials/pagination.html" %}
+  {% else %}
+  <div class="empty"><h3>No requests found</h3><p>Change the search or status filter.</p></div>
+  {% endif %}
+</div>
+{% endblock %}

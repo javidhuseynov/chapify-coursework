@@ -7,28 +7,32 @@ README (developer guide); this guide covers daily administration.
 
 - The account created with `python manage.py createsuperuser` is an administrator.
 - An administrator can make other accounts administrators on the **Users** page.
-- Administrator links appear in the top navigation: **Admin Dashboard**, **Users**,
-  **Transactions**, **Printers**. Staff accounts also see **Django Admin** (`/admin/`), the
-  low-level database tool.
+- After logging in, an administrator lands on **Overview** instead of the student home page. The
+  side menu has **Operations** (Overview, Requests, Printers) and **Administration** (Users,
+  Payments, Audit log, Reports). Staff accounts also see **Database admin** (`/admin/`), the
+  low-level Django tool. Student pages such as *Print a document* are not shown to
+  administrators.
+- Hiding links is only convenience: every administrator page and `/api/admin/*` endpoint checks
+  the role on the server and returns *403* to students.
 
-## 2. Admin Dashboard
+## 2. Overview
 
 | Section | Use |
 |---|---|
-| Counters | Requests, confirmed / rejected payments, completed / failed jobs |
-| Print Queue | Jobs that are queued or printing, and which printer they use |
-| Process next print job | Runs one step of the simulated print server (tick *Simulate printer failure* to demonstrate a failure) |
-| Recently failed jobs | Failure reason and a **Retry** button |
+| Counters | Waiting to print, printed today, failed jobs, paid today, open requests |
+| Print queue | Jobs that are queued or printing, and which printer they use |
+| Print next job | Runs one step of the simulated print server (tick *Simulate a printer fault* to demonstrate a failure) |
+| Failed jobs | Failure reason and a **Print again** button |
 | Printers | Current status of each printer |
-| Recent Print Requests | Search by request number, username or file name; filter by status |
-| Recent Audit Logs | The latest security and workflow events |
+| Recent activity | The latest security and workflow events (full list: **Audit log**) |
 
-**Administrative Report** (link on the dashboard) summarises requests, payments and jobs by
-status and the total confirmed amount.
+**Requests** lists every request from every user (search by request number, username or file
+name; filter by status). **Reports** summarises requests, payments and jobs by status, printed
+pages and the total confirmed amount.
 
 ### Processing the queue
 
-Either press **Process next print job** for each job, or start the simulated print server in a
+Either press **Print next job** for each job, or start the simulated print server in a
 second command window (with the virtual environment activated):
 
 ```bat
@@ -38,10 +42,10 @@ python manage.py run_print_simulator --fail-rate 0.2
 
 It processes jobs continuously until Ctrl+C. `--fail-rate 0.2` makes 20 % of jobs fail.
 
-### Retrying a failed job
+### Printing a failed job again
 
-A failed job keeps its document for 24 hours. In **Recently failed jobs** press **Retry**: the job
-goes back to the queue and the request to *Payment confirmed*. Retry is refused when the file has
+A failed job keeps its document for 24 hours. In **Failed jobs** press **Print again**: the job
+goes back to the queue and the request to *Payment confirmed*. This is refused when the file has
 already been deleted. Payments are not refunded automatically.
 
 ## 3. Users
@@ -50,11 +54,11 @@ already been deleted. Payments are not refunded automatically.
 - **Block**: the user can no longer log in, any open session ends immediately and their API token
   is deleted. Their existing requests stay in the system.
 - **Unblock**: access is restored.
-- **Make admin / Make user**: changes the role.
+- **Make administrator / Make student**: changes the role.
 - You cannot block or change the role of your own account (prevents locking yourself out).
 - Every change is written to the audit log.
 
-## 4. Transactions
+## 4. Payments
 
 All payment attempts: date, user, request, amount, status (Initiated, Confirmed, Rejected,
 Cancelled), Chapify's payment reference and the gateway's transaction id. Filter by status and
@@ -76,8 +80,8 @@ request creation, update and cancellation, payment initiation, confirmation and 
 refused (forged, expired or mismatching) payment notifications, print job creation and status
 changes, file deletion, account changes and printer changes.
 
-View it on the dashboard, the report page, or in full in **Django Admin → Audit logs** (filter
-by event type and date, search the description).
+The latest events are on **Overview**; the full log, filterable by event type and searchable,
+is on **Audit log** (and in **Database admin → Audit logs**).
 
 ## 7. Routine maintenance
 

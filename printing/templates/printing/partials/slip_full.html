@@ -1,0 +1,20 @@
+{% load chapify %}
+<div class="slip"><span class="crop"></span>
+  <div class="slip-head">
+    <div>
+      <div class="slip-id">Request #{{ print_request.id }}</div>
+      <div class="slip-title">{{ print_request.document.file_name }}</div>
+    </div>
+    <div>
+      <div class="slip-price">{{ print_request.total_price }}<small>EUR</small></div>
+    </div>
+  </div>
+  <dl class="spec">
+    <div><dt>Pages</dt><dd class="num">{{ print_request.document_pages }}</dd></div>
+    <div><dt>Copies</dt><dd class="num">{{ print_request.settings.copies }}</dd></div>
+    <div><dt>Color</dt><dd>{{ print_request.settings.get_color_mode_display }}</dd></div>
+    <div><dt>Paper</dt><dd>{{ print_request.settings.paper_format }}</dd></div>
+    <div><dt>Sides</dt><dd>{{ print_request.settings.get_duplex_mode_display }}</dd></div>
+    <div><dt>Status</dt><dd><span class="status status-{{ print_request.status|status_tone }}">{{ print_request.get_status_display }}</span></dd></div>
+  </dl>
+</div>

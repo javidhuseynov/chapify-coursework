@@ -1,0 +1,9 @@
+{% load chapify %}
+<div class="slip slip-row"><span class="crop"></span>
+  <div>
+    <a class="stretched slip-title" href="{% url 'request_status' item.id %}">{{ item.document.file_name }}</a>
+    <div class="subtle small">Request #{{ item.id }}, {{ item.document_pages }} page{{ item.document_pages|pluralize }} × {{ item.settings.copies }}, {{ item.settings.get_color_mode_display|lower }}, {{ item.settings.paper_format }}</div>
+  </div>
+  <span class="slip-row-price num">{{ item.total_price }} EUR</span>
+  <span class="status status-{{ item.status|status_tone }}">{{ item.get_status_display }}</span>
+</div>

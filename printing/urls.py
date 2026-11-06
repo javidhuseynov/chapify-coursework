@@ -14,11 +14,15 @@ urlpatterns = [
     path("payments/callback/", views.payment_callback, name="payment_callback"),
     path("status/<int:request_id>/", views.request_status, name="request_status"),
     path("history/", views.request_history, name="request_history"),
+    path("help/", views.help_page, name="help"),
+    path("account/", views.account, name="account"),
 
     path("request/<int:request_id>/edit/", views.edit_print_request, name="edit_print_request"),
     path("request/<int:request_id>/cancel/", views.cancel_print_request, name="cancel_print_request"),
 
     path("admin-dashboard/", views.admin_dashboard, name="admin_dashboard"),
+    path("admin-requests/", views.admin_requests, name="admin_requests"),
+    path("admin-audit/", views.admin_audit, name="admin_audit"),
     path("admin-report/", views.admin_report, name="admin_report"),
     path("admin-dashboard/process-print-job/", views.admin_process_print_job, name="admin_process_print_job"),
     path("admin-dashboard/jobs/<int:job_id>/retry/", views.admin_retry_print_job, name="admin_retry_print_job"),

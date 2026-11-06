@@ -7,7 +7,15 @@ from printing.models import Profile
 from .base import ChapifyTestCase
 
 USER_PAGES = ["payment", "request_status", "edit_print_request", "cancel_print_request"]
-ADMIN_PAGES = ["admin_dashboard", "admin_report", "admin_users", "admin_transactions", "admin_printers"]
+ADMIN_PAGES = [
+    "admin_dashboard",
+    "admin_requests",
+    "admin_report",
+    "admin_users",
+    "admin_transactions",
+    "admin_printers",
+    "admin_audit",
+]
 ADMIN_API = [
     "/api/admin/summary/",
     "/api/admin/requests/",
@@ -94,7 +102,7 @@ class AdministratorAccessTests(ChapifyTestCase):
         for name in ADMIN_PAGES:
             response = self.client.get(reverse(name))
             self.assertEqual(response.status_code, 200, name)
-        self.assertContains(self.client.get(reverse("admin_dashboard")), "Print Queue")
+        self.assertContains(self.client.get(reverse("admin_dashboard")), "Print queue")
 
         for url in ADMIN_API:
             self.assertEqual(self.client.get(url).status_code, 200, url)

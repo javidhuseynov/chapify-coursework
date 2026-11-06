@@ -23,7 +23,7 @@ class SecurityHeaderTests(ChapifyTestCase):
             "base-uri 'none'",
             "frame-ancestors 'none'",
             "form-action 'self'",
-            "style-src 'self' https://cdn.jsdelivr.net",
+            "style-src 'self'",
         ):
             self.assertIn(directive, csp)
 
@@ -33,12 +33,18 @@ class SecurityHeaderTests(ChapifyTestCase):
         self.assertEqual(response["Referrer-Policy"], "same-origin")
 
     def test_templates_use_no_inline_styles_or_scripts(self):
-        # Required for the strict CSP (no 'unsafe-inline').
-        for name in ("home", "login", "register"):
+        # Required for the strict CSP (no 'unsafe-inline') and no third-party resources.
+        self.client.force_login(self.make_user())
+        for name in ("login", "register", "home", "upload_document", "request_history", "help", "account"):
+            if name in ("login", "register"):
+                self.client.logout()
             content = self.client.get(reverse(name)).content.decode()
             self.assertNotIn("style=", content, name)
-            self.assertNotIn("<script", content, name)
-            self.assertIn('integrity="sha384-', content, name)
+            self.assertNotIn("<script>", content, name)
+            self.assertNotIn("cdn.", content, name)
+            self.assertIn("/static/chapify/app.css", content, name)
+            if name in ("login", "register"):
+                self.client.force_login(User.objects.get(username="alice"))
 
     def test_api_responses_have_headers_too(self):
         response = self.client.post("/api/auth/token/", {"username": "x", "password": "y"})
@@ -98,12 +104,13 @@ class RegistrationBotProtectionTests(ChapifyTestCase):
         content = self.client.get(reverse("register")).content.decode()
         self.assertIn('name="form_started"', content)
         self.assertIn('name="website"', content)
-        self.assertIn('class="d-none"', content)
+        self.assertIn('class="honeypot"', content)
 
     @override_settings(REGISTRATION_LIMIT_PER_IP=2)
     def test_registration_attempts_are_rate_limited_per_ip(self):
         for number in range(2):
             self.client.post(reverse("register"), registration_data(f"user{number}"), REMOTE_ADDR="10.1.1.1")
+            self.client.logout()  # a successful registration logs the new user in
 
         response = self.client.post(reverse("register"), registration_data("user9"), REMOTE_ADDR="10.1.1.1")
         self.assertEqual(response.status_code, 429)

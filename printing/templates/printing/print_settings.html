@@ -1,113 +1,30 @@
 {% extends "printing/base.html" %}
 
-{% block title %}Print Settings - Chapify{% endblock %}
+{% block title %}Print settings{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="mb-1">Print Settings</h2>
-        <p class="text-muted mb-0">
-            Select printing parameters and continue to automatic price calculation.
-        </p>
-    </div>
-
-    <div>
-        <a href="{% url 'upload_document' %}" class="btn btn-outline-secondary">Back to upload</a>
-    </div>
+{% include "printing/partials/flow_steps.html" with step=2 %}
+<div class="page-head">
+  <div>
+    <h1>Print settings</h1>
+    <p>{{ document.file_name }}, {{ document.page_count }} page{{ document.page_count|pluralize }} (counted automatically from the PDF)</p>
+  </div>
 </div>
 
-<div class="row">
-    <div class="col-md-7">
-        <div class="card shadow-sm">
-            <div class="card-header bg-dark text-white">
-                <h5 class="mb-0">Print Configuration</h5>
-            </div>
-
-            <div class="card-body">
-                <div class="alert alert-light border">
-                    Document:
-                    <strong>{{ document.file_name }}</strong>
-                </div>
-
-                <form method="post">
-                    {% csrf_token %}
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Number of pages</label>
-                        <div class="form-control-plaintext">
-                            {{ document.page_count }} page{{ document.page_count|pluralize }}
-                            <span class="text-muted small">(counted automatically from the PDF)</span>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Number of copies</label>
-                        {{ form.copies }}
-                        {% if form.copies.errors %}
-                            <div class="text-danger mt-2">{{ form.copies.errors }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Color mode</label>
-                        {{ form.color_mode }}
-                        {% if form.color_mode.errors %}
-                            <div class="text-danger mt-2">{{ form.color_mode.errors }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Paper format</label>
-                        {{ form.paper_format }}
-                        {% if form.paper_format.errors %}
-                            <div class="text-danger mt-2">{{ form.paper_format.errors }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Duplex mode</label>
-                        {{ form.duplex_mode }}
-                        {% if form.duplex_mode.errors %}
-                            <div class="text-danger mt-2">{{ form.duplex_mode.errors }}</div>
-                        {% endif %}
-                    </div>
-
-                    <button type="submit" class="btn btn-dark">Calculate price and continue</button>
-                    <a href="/" class="btn btn-outline-secondary">Cancel</a>
-                </form>
-            </div>
-        </div>
+<div class="grid grid-main-side">
+  <form method="post" class="sheet" data-price-form novalidate>
+    {% csrf_token %}
+    {% include "printing/partials/settings_fields.html" with pages=document.page_count %}
+    <div class="btn-row">
+      <button type="submit" class="btn btn-primary btn-lg">Continue to payment</button>
+      <a class="btn btn-quiet" href="{% url 'home' %}">Not now</a>
     </div>
+  </form>
 
-    <div class="col-md-5">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light">
-                <h5 class="mb-0">Workflow Step 2 of 3</h5>
-            </div>
-
-            <div class="card-body">
-                <p class="mb-2">
-                    <strong>1. Upload document</strong>
-                </p>
-                <p class="text-muted">
-                    The document has been uploaded and validated.
-                </p>
-
-                <p class="mb-2">
-                    <strong>2. Select print settings</strong>
-                </p>
-                <p class="text-muted">
-                    The selected values are used to calculate the total price.
-                </p>
-
-                <p class="mb-2">
-                    <strong>3. Pay</strong>
-                </p>
-                <p class="text-muted mb-0">
-                    A print job is queued only after the payment gateway confirms the payment.
-                </p>
-            </div>
-        </div>
-    </div>
+  <aside class="sheet">
+    <h3>How the price is made</h3>
+    <p class="small muted">Each page costs {{ pricing_data.base|floatformat:2 }} EUR in black and white on A4. Color doubles the page price, A3 multiplies it by 1.8, and double-sided printing takes 10% off.</p>
+    <a class="small" href="{% url 'help' %}">Full price list</a>
+  </aside>
 </div>
 {% endblock %}

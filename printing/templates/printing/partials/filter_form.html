@@ -1,0 +1,18 @@
+{% comment %}Search + status filter. Expects: search_label, search_query, status_choices, selected_status, reset_url.{% endcomment %}
+<form method="get" class="filters" role="search">
+  <div class="field">
+    <label for="q">Search</label>
+    <input type="search" id="q" name="q" value="{{ search_query }}" placeholder="{{ search_label }}">
+  </div>
+  {% if status_choices %}
+  <div class="field narrow">
+    <label for="status">{{ status_label|default:"Status" }}</label>
+    <select id="status" name="status">
+      <option value="">Any</option>
+      {% for value, label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <button type="submit" class="btn">Apply</button>
+  {% if search_query or selected_status %}<a class="btn btn-quiet" href="{{ reset_url }}">Clear</a>{% endif %}
+</form>

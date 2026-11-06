@@ -1,0 +1,20 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page not found – Chapify</title>
+  <link rel="icon" href="{% static 'chapify/favicon.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'chapify/app.css' %}">
+</head>
+<body>
+  <main class="error-page">
+    <div class="slip"><span class="crop"></span>
+      <div class="error-code">404</div>
+      <h1>Page not found</h1>
+      <p class="muted">The page may have moved, or the request belongs to another account.</p>
+      <a class="btn btn-primary" href="/">Go to Chapify</a>
+    </div>
+  </main>
+</body>
+</html>
