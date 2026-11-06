@@ -16,7 +16,7 @@
       <tbody>
       {% for item in page_obj %}
         <tr>
-          <td class="num">#{{ item.id }}</td>
+          <td class="ref">#{{ item.id }}</td>
           <td>{{ item.user.username }}</td>
           <td>{{ item.document.file_name }}</td>
           <td class="num">{{ item.document_pages }} × {{ item.settings.copies }}</td>

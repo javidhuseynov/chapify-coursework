@@ -23,7 +23,7 @@
         <tr>
           <td class="nowrap">{{ payment.payment_date|date:"j M Y, H:i" }}</td>
           <td>{{ payment.print_request.user.username }}</td>
-          <td class="num">#{{ payment.print_request_id }}</td>
+          <td class="ref">#{{ payment.print_request_id }}</td>
           <td class="num">{{ payment.amount }} {{ payment.currency }}</td>
           <td><span class="status status-{{ payment.payment_status|status_tone }}">{{ payment.get_payment_status_display }}</span></td>
           <td><code>{{ payment.reference }}</code></td>

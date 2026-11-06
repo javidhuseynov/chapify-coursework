@@ -37,8 +37,8 @@
           <tbody>
           {% for job in active_jobs %}
             <tr>
-              <td class="num">#{{ job.id }}</td>
-              <td class="num">#{{ job.print_request_id }}</td>
+              <td class="ref">#{{ job.id }}</td>
+              <td class="ref">#{{ job.print_request_id }}</td>
               <td>{{ job.print_request.user.username }}</td>
               <td class="num">{{ job.print_request.document_pages }} × {{ job.print_request.settings.copies }}</td>
               <td>{{ job.printer.printer_name|default:"Waiting for a printer" }}</td>
@@ -64,7 +64,7 @@
           <tbody>
           {% for job in failed_job_list %}
             <tr>
-              <td class="num">#{{ job.id }}</td>
+              <td class="ref">#{{ job.id }}</td>
               <td>{{ job.print_request.user.username }}</td>
               <td>{{ job.printer.printer_name|default:"-" }}</td>
               <td>{{ job.failure_reason }}</td>

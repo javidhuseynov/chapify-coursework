@@ -86,15 +86,15 @@ normal setup: migrations are part of the repository.
 Optional: fill the database first with `python manage.py seed_demo --password <choose-a-password>`
 (demo accounts `demo_admin`, `demo_student`, `demo_student2` and requests in every state).
 
-1. Register a user (or log in) and choose **New Request**.
-2. Upload a PDF (max 5 MB, not password-protected). The page count is read from the file; choose copies, colour, paper and duplex.
+1. Register a user (or log in) and choose **Print a document**.
+2. Upload a PDF (max 5 MB, not password-protected). The page count is read from the file; choose copies, color, paper size and sides; the price estimate updates as you choose.
 3. On the payment page press **Pay**. You are sent to the Chapify Pay test checkout.
 4. Choose **Approve payment** (or **Decline** to see the retry path).
 5. Back in Chapify, the request is *Payment confirmed* and the print job is *Queued*.
-6. Log in as the administrator, open **Admin Dashboard** and press **Process next print job**
-   (tick *Simulate printer failure* to demonstrate a failed job), or run `run_print_simulator`.
+6. Log in as the administrator, open **Overview** and press **Print next job**
+   (tick *Simulate a printer fault* to demonstrate a failed job), or run `run_print_simulator`.
 7. The user's request becomes *Completed* (or *Failed*); the uploaded file has been deleted.
-8. The audit log (dashboard, report page, Django admin) shows every step.
+8. **Audit log** (and *Recent activity* on Overview) shows every step.
 
 ## 3. Request lifecycle
 
@@ -114,7 +114,7 @@ Print jobs: `QUEUED -> IN_PROGRESS -> COMPLETED | FAILED` (an administrator can 
 The uploaded file is deleted when the request is `COMPLETED` or `CANCELLED`; a `FAILED` request keeps
 it for the retention period so the job can be retried.
 
-Price (thesis §4.5): `pages (counted from the PDF) x copies x 0.10 EUR x colour (1.0/2.0) x paper (A4 1.0 / A3 1.8) x duplex (1.0/0.9)`,
+Price (thesis §4.5): `pages (counted from the PDF) x copies x 0.10 EUR x color (1.0/2.0) x paper (A4 1.0 / A3 1.8) x duplex (1.0/0.9)`,
 calculated with exact decimals and rounded half-up to cents (`printing/pricing.py`).
 
 ## 4. Payment security design
@@ -149,15 +149,20 @@ tests: [docs/TRACEABILITY.md](docs/TRACEABILITY.md).
   automatically; others are promoted on the **Users** page. Used for the admin pages and the
   `/api/admin/*` endpoints. (The Django admin site itself also needs Django's *staff status*.)
 
-Administrator pages (links in the top navigation):
+After login the role decides the start page and menu: students land on **Home**, administrators
+on **Overview**. Hiding links is convenience only; every admin view checks the role on the server.
+
+Administrator pages (side menu):
 
 | Page | Purpose |
 |---|---|
-| Admin Dashboard | Statistics, print queue, *Process next print job*, *Retry* for failed jobs, recent audit log |
-| Users | Search accounts, block/unblock, make admin/user (not your own account) |
-| Transactions | All payment attempts with status, payment reference and gateway transaction |
+| Overview | Counters, print queue, *Print next job*, *Print again* for failed jobs, printers, recent activity |
+| Requests | All requests from all users, searchable and filterable |
 | Printers | Add printers, set Available / Offline / Error (only Available printers receive jobs) |
-| Administrative Report | Summary counts and totals |
+| Users | Search accounts, block/unblock, make administrator/student (not your own account) |
+| Payments | All payment attempts with status, payment reference and gateway transaction |
+| Audit log | Every recorded event, filterable by type |
+| Reports | Totals by status, printed pages and confirmed revenue |
 
 A **blocked** account cannot log in, its open sessions end and its API tokens are deleted.
 A **failed** print job keeps its file so it can be retried; after the retention period the file

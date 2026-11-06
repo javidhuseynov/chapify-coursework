@@ -129,6 +129,8 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: var(--space-5) 0; }
   display: grid;
   grid-template-columns: var(--sidebar) minmax(0, 1fr);
   min-height: 100vh;
+  /* Paint the sidebar column to the bottom of long pages, not just the viewport. */
+  background: linear-gradient(to right, var(--sheet) calc(var(--sidebar) - 1px), var(--rule) 0, var(--rule) var(--sidebar), transparent 0);
 }
 
 .sidebar {
@@ -308,6 +310,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: var(--space-5) 0; }
 .spec dt { font-size: var(--t-xs); color: var(--ink-3); }
 .spec dd { margin: 0; font-weight: 500; }
 
+.slip > .crop { position: absolute; inset: 0; pointer-events: none; }
 .slip-list { display: grid; gap: var(--space-3); }
 .slip-row {
   display: grid;
@@ -501,6 +504,9 @@ input[aria-invalid="true"], .field.has-error input { border-color: var(--bad); }
 /* Option groups rendered as segmented choices */
 .choices { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; border: 0; }
 .choices legend { font-size: var(--t-sm); font-weight: 600; margin-bottom: var(--space-1); padding: 0; width: 100%; }
+.choices.field { margin-bottom: var(--space-5); }
+.estimate { margin-top: var(--space-2); }
+table.data td.ref { font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }
 .choice { position: relative; }
 .choice input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
 .choice span {
@@ -699,7 +705,7 @@ table.kv td { padding: var(--space-2) 0; overflow-wrap: anywhere; }
 /* ------------------------------------------------------------------ */
 
 @media (max-width: 960px) {
-  .shell { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: 1fr; background: none; }
   .sidebar { display: none; }
   .mobile-bar {
     display: block;

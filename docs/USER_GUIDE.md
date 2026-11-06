@@ -7,20 +7,25 @@ The application runs in a web browser. Locally it is at http://127.0.0.1:8000/.
 
 ## 1. Create an account and log in
 
-1. Open Chapify and choose **Register**.
+1. Open Chapify. Every page first shows the log-in screen; choose **Create an account**.
 2. Enter a username, your email address and a password (twice). Chapify rejects passwords that
    are too short, too common, only numbers or too similar to your username.
-3. After registering you are logged in. Next time use **Login**.
+3. After registering you are logged in and see your **Home** page. Next time use **Log in**.
+
+After logging in, Chapify decides from your account which pages you see: students get
+**Print a document**, **Home** and **My requests**; administrators get the operations pages
+described in the administrator guide. Both have **Account** (change your password) and
+**Prices and help**.
 
 If you enter a wrong password 5 times in a row, logging in is blocked for 15 minutes for your
 username from that computer, even with the correct password. Wait and try again.
 
-Your session ends when you close the browser or after 8 hours. Use **Logout** on shared computers.
+Your session ends when you close the browser or after 8 hours. Use **Log out** (bottom of the side menu, or under **Menu** on a phone) on shared computers.
 
 ## 2. Upload a document
 
-1. Choose **New Request**.
-2. Select your file and press **Continue to print settings**.
+1. Choose **Print a document**. The steps *Upload, Settings, Pay, Print* are shown at the top.
+2. Drop your PDF on the upload area (or click it to choose a file) and press **Continue to settings**.
 
 Rules for the file:
 
@@ -38,34 +43,38 @@ document" for a renamed photo).
 
 Chapify shows the number of pages it counted in your PDF (you cannot change it). Choose:
 
-- **Copies**
-- **Colour mode**: black-and-white or colour
-- **Paper format**: A4 or A3
-- **Duplex mode**: one-sided or double-sided
+- **Copies** (1 to 100)
+- **Color**: black and white or color
+- **Paper size**: A4 or A3
+- **Sides**: one-sided or double-sided
 
-Press **Calculate price and continue**. The price is
+The estimated price updates as you choose. Press **Continue to payment** (the server calculates
+the final price; **Not now** keeps the upload without creating a request). The price is
 
-`pages x copies x 0.10 EUR x colour (B/W 1.0, colour 2.0) x paper (A4 1.0, A3 1.8) x duplex (one-sided 1.0, double-sided 0.9)`
+`pages x copies x 0.10 EUR x color (B/W 1.0, color 2.0) x paper (A4 1.0, A3 1.8) x sides (one-sided 1.0, double-sided 0.9)`
 
-Example: a 10-page PDF, 2 copies, colour, A4, one-sided costs 10 x 2 x 0.20 = **4.00 EUR**.
+Example: a 10-page PDF, 2 copies, color, A4, one-sided costs 10 x 2 x 0.20 = **4.00 EUR**.
+The full price list is on **Prices and help**.
 
 ## 4. Pay
 
-1. On the payment page check the summary and press **Pay**.
+1. On the payment page check the job slip and press **Pay … EUR**.
 2. You are taken to the payment gateway page (**Chapify Pay**). In this prototype the gateway is
    in *test mode*: there is no card form; press **Approve payment** (or **Decline payment** to
    try the declined case).
 3. You return to Chapify automatically.
 
 - **Approved**: your request becomes *Payment confirmed* and a print job is placed in the queue.
-- **Declined**: your request becomes *Payment rejected*. Press **Try payment again** or cancel.
+- **Declined**: your request becomes *Payment rejected*. Press **Try payment again** or **Cancel request**.
 
 Chapify never sees or stores card details. Until a payment is confirmed you can still
-**Edit** the settings (the price is recalculated) or **Cancel** the request.
+**Change settings** (the price is recalculated) or **Cancel request**.
 
 ## 5. Follow your print job
 
-Open **My History** and choose **View** next to a request. You see:
+**Home** lists requests in progress and recently finished ones. **My requests** lists all of
+them; choose **View** (or **Pay** for unpaid ones). The request page shows the job slip, a
+progress timeline with times, the print job and the payment. Request statuses:
 
 | Request status | Meaning |
 |---|---|
@@ -73,12 +82,12 @@ Open **My History** and choose **View** next to a request. You see:
 | Payment rejected | The gateway declined the payment; you may try again |
 | Payment confirmed | Paid; the print job is queued or printing |
 | Completed | Printed; collect your printout |
-| Failed | The printer had a problem; staff can retry the job |
+| Failed | The printer had a problem; staff can print it again |
 | Cancelled | Cancelled by you, or not paid within 24 hours |
 
 The print job shows *Queued*, *In progress*, *Completed* or *Failed* (with the reason).
 
-**My History** can be searched by request number or file name and filtered by status.
+**My requests** can be searched by request number or file name and filtered by status.
 
 ## 6. Your data
 
