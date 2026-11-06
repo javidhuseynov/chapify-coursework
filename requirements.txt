@@ -1,6 +1,6 @@
 asgiref==3.11.1
 Django==6.0.8
 djangorestframework==3.18.2
-sqlparse==0.6.0
+sqlparse==0.6.1
 tzdata==2026.2
 pypdf==6.21.4
