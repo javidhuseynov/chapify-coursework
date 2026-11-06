@@ -13,7 +13,7 @@ print queue, payments, printers and the audit log.
   Chapify only accepts payment results that carry the gateway's valid HMAC-SHA256 signature.
 - **Printing:** a simulated print server (queue + `run_print_simulator` command, or a button on
   the admin dashboard). No physical printer is needed.
-- **Stack:** Python 3.12+, Django 6.0, Django REST Framework, SQLite, Bootstrap 5.
+- **Stack:** Python 3.12+, Django 6.1, Django REST Framework, SQLite; own CSS/JS served by the app (no CDN).
 
 **Documentation:** [User guide](docs/USER_GUIDE.md) · [Administrator guide](docs/ADMIN_GUIDE.md) ·
 [Requirement-to-test traceability](docs/TRACEABILITY.md) · [Security checklist](docs/SECURITY_CHECKLIST.md). This README is the developer guide.
