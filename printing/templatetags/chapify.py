@@ -1,4 +1,5 @@
 from django import template
+from django.utils.html import format_html
 
 register = template.Library()
 
@@ -37,7 +38,7 @@ def current(context, *url_names):
     request = context.get("request")
     match = getattr(request, "resolver_match", None)
     if match is not None and match.url_name in url_names:
-        return 'aria-current="page"'
+        return format_html('aria-current="page"')  # constant markup, nothing user-supplied
     return ""
 
 

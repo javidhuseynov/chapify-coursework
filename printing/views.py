@@ -134,14 +134,19 @@ def home(request):
             "pages_this_month": sum(
                 item.document_pages * item.settings.copies for item in completed_this_month
             ),
-            "spent_this_month": PaymentTransaction.objects.filter(
+            "spent_this_month": money(PaymentTransaction.objects.filter(
                 print_request__user=request.user,
                 payment_status=PaymentTransaction.STATUS_CONFIRMED,
                 payment_date__gte=month_start,
-            ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00"),
+            ).aggregate(total=Sum("amount"))["total"]),
             "total_requests": own_requests.count(),
         },
     )
+
+
+def money(value):
+    """Sums of DecimalFields come back without cents on SQLite (Decimal('4')); show 4.00."""
+    return (value or Decimal("0")).quantize(Decimal("0.01"))
 
 
 def paginate(request, queryset, per_page=20):
@@ -607,7 +612,7 @@ def admin_report(request):
             "rejected_payments_count": PaymentTransaction.objects.filter(
                 payment_status=PaymentTransaction.STATUS_REJECTED
             ).count(),
-            "total_confirmed_amount": confirmed_payments.aggregate(total=Sum("amount"))["total"] or Decimal("0.00"),
+            "total_confirmed_amount": money(confirmed_payments.aggregate(total=Sum("amount"))["total"]),
             "printed_pages": sum(item.document_pages * item.settings.copies for item in completed),
             "breakdowns": [
                 {"title": "Requests", "rows": breakdown(PrintRequest.objects, "status")},
@@ -632,9 +637,9 @@ def admin_dashboard(request):
                 job_status=PrintJob.STATUS_COMPLETED, completed_at__gte=today_start
             ).count(),
             "failed_jobs": PrintJob.objects.filter(job_status=PrintJob.STATUS_FAILED).count(),
-            "revenue_today": PaymentTransaction.objects.filter(
+            "revenue_today": money(PaymentTransaction.objects.filter(
                 payment_status=PaymentTransaction.STATUS_CONFIRMED, payment_date__gte=today_start
-            ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00"),
+            ).aggregate(total=Sum("amount"))["total"]),
             "open_requests": PrintRequest.objects.filter(status__in=PrintRequest.OPEN_STATUSES).count(),
             "active_jobs": (
                 PrintJob.objects
@@ -811,9 +816,9 @@ def admin_transactions(request):
         "printing/admin_transactions.html",
         {
             "page_obj": paginate(request, transactions, per_page=25),
-            "confirmed_total": (
+            "confirmed_total": money(
                 transactions.filter(payment_status=PaymentTransaction.STATUS_CONFIRMED)
-                .aggregate(total=Sum("amount"))["total"] or 0
+                .aggregate(total=Sum("amount"))["total"]
             ),
             "search_query": search_query,
             "selected_status": status_filter,
