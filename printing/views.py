@@ -19,7 +19,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from . import api_tokens, payments, pricing, services
+from . import api_tokens, payments, pricing, services, stations
 from .forms import DocumentUploadForm, PrintSettingsForm, RegisterForm
 from .models import (
     AuditLog,
@@ -654,6 +654,7 @@ def admin_report(request):
 
 @chapify_admin_required
 def admin_dashboard(request):
+    stations.expire_silent_stations()
     today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
     return render(
@@ -871,7 +872,15 @@ def admin_printers(request):
             messages.success(request, f"Printer {printer.printer_name} added.")
         return redirect("admin_printers")
 
-    printers = Printer.objects.annotate(job_count=Count("printjob")).order_by("printer_name")
+    stations.expire_silent_stations()
+    printers = list(Printer.objects.annotate(job_count=Count("printjob")).order_by("printer_name"))
+    now = timezone.now()
+    for printer in printers:
+        printer.station_connected = stations.is_connected(printer, now)
+        printer.seen_recently = (
+            printer.station_last_seen_at is not None
+            and (now - printer.station_last_seen_at).total_seconds() < 60
+        )
 
     return render(
         request,
@@ -899,6 +908,34 @@ def admin_printer_status(request, printer_id):
         messages.success(request, f"{printer.printer_name} is now {printer.get_printer_status_display()}.")
 
     return redirect("admin_printers")
+
+
+@chapify_admin_required
+@require_POST
+def admin_printer_station(request, printer_id):
+    """Connect a printer to a print station (new key, shown once) or disconnect it."""
+    printer = get_object_or_404(Printer, pk=printer_id)
+
+    if request.POST.get("action") == "disconnect":
+        try:
+            stations.disconnect_station(printer, request.user)
+        except services.WorkflowError as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(request, f"The print station of {printer.printer_name} was disconnected.")
+        return redirect("admin_printers")
+
+    raw_key = stations.issue_station_key(printer, request.user)
+    printer.refresh_from_db()
+    # The key is rendered directly (not stored in a message or the session) and
+    # never shown again.
+    response = render(
+        request,
+        "printing/admin_station_key.html",
+        {"printer": printer, "station_key": raw_key, "server_url": request.build_absolute_uri("/").rstrip("/")},
+    )
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @chapify_admin_required

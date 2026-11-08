@@ -198,6 +198,7 @@ Users see and revoke their signed-in apps on the **Account** page.
 | POST | `/api/requests/<id>/cancel/` | Cancel an unpaid request |
 | POST | `/payments/callback/` | Gateway webhook (form field or JSON `notification`; no login, signature-verified) |
 | GET | `/api/admin/summary/`, `requests/`, `transactions/`, `print-jobs/`, `printers/`, `audit-logs/` | Administrator only |
+| POST/GET | `/api/printer/heartbeat/`, `jobs/next/`, `jobs/<id>/document/`, `jobs/<id>/complete/`, `jobs/<id>/fail/` | Print stations only (`Authorization: Printer <key>`), see [print_station/README.md](print_station/README.md) |
 
 Command Prompt examples (`curl` is built into Windows; placeholders in `<...>`):
 
@@ -213,7 +214,8 @@ Open the returned `checkout_url` in a browser to approve or decline the payment.
 
 | Command | Purpose |
 |---|---|
-| `python manage.py run_print_simulator [--once] [--fail-rate 0.2] [--seconds-per-page 0.5]` | Simulated print server |
+| `python manage.py run_print_simulator [--once] [--fail-rate 0.2] [--seconds-per-page 0.5]` | Built-in simulated print server (printers without a print station) |
+| `python manage.py printer_station_key "<printer name>"` | Generate a print station key (same as *Connect a print station* on the Printers page) |
 | `python manage.py cleanup_documents [--hours 24] [--dry-run]` | Retention policy: expire unpaid requests, delete abandoned uploads and old files of failed jobs |
 | `python manage.py seed_demo [--password <pw>]` | Demonstration data: demo accounts, printers, requests in every state |
 

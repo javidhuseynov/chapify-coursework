@@ -22,6 +22,8 @@ jobs:
         run: |
           pip install -r requirements.txt playwright
           python -m playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends xvfb imagemagick > /dev/null
+          python -c "import tkinter; print('tk', tkinter.TkVersion)"
       - name: Prepare demo data
         run: |
           python manage.py migrate
@@ -32,6 +34,22 @@ jobs:
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/login/ > /dev/null && break; sleep 1; done
       - name: Take screenshots
         run: python .github/scripts/screenshots.py screenshots
+      - name: Print station (separate application) on a virtual display
+        run: |
+          python .github/scripts/screenshots.py screenshots station-setup
+          Xvfb :99 -screen 0 1280x800x24 > /dev/null 2>&1 &
+          sleep 2
+          export DISPLAY=:99
+          CHAPIFY_STATION_KEY=$(cat station.key) python -m print_station --seconds-per-page 1.5 --receipts receipts > station.log 2>&1 &
+          sleep 9
+          import -window root screenshots/desktop-31-station-printing.png
+          sleep 35
+          import -window root screenshots/desktop-32-station-done.png
+          python .github/scripts/screenshots.py screenshots station-result
+          ls receipts
+      - name: Print station log
+        if: always()
+        run: cat station.log || true
       - name: Server log
         if: always()
         run: tail -n 60 server.log

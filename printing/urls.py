@@ -32,6 +32,7 @@ urlpatterns = [
     path("admin-transactions/", views.admin_transactions, name="admin_transactions"),
     path("admin-printers/", views.admin_printers, name="admin_printers"),
     path("admin-printers/<int:printer_id>/status/", views.admin_printer_status, name="admin_printer_status"),
+    path("admin-printers/<int:printer_id>/station/", views.admin_printer_station, name="admin_printer_station"),
 
     path("api/my/requests/", views.api_my_requests, name="api_my_requests"),
     path("api/my/requests/<int:request_id>/", views.api_request_detail, name="api_request_detail"),

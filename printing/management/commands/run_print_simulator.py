@@ -3,7 +3,7 @@ import time
 
 from django.core.management.base import BaseCommand, CommandError
 
-from printing import services
+from printing import services, stations
 from printing.models import PrintJob
 
 
@@ -46,6 +46,7 @@ class Command(BaseCommand):
 
         try:
             while True:
+                stations.expire_silent_stations()
                 processed = self.process_queue(rng, fail_rate, options["seconds_per_page"])
 
                 if options["once"]:
@@ -64,7 +65,10 @@ class Command(BaseCommand):
 
             if job is None:
                 if PrintJob.objects.filter(job_status=PrintJob.STATUS_QUEUED).exists():
-                    self.stdout.write(self.style.WARNING("Jobs are queued but no printer is AVAILABLE."))
+                    self.stdout.write(self.style.WARNING(
+                        "Jobs are queued but no simulator printer is AVAILABLE "
+                        "(printers with a print station are served by their station)."
+                    ))
                 return processed
 
             print_request = job.print_request
