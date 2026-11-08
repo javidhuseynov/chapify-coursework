@@ -186,6 +186,27 @@ class PrinterApiTests(StationTestMixin, ChapifyTestCase):
         self.assertEqual(self.heartbeat(self.key).status_code, 401)
         self.assertEqual(self.heartbeat(new_key).status_code, 200)
 
+    def test_connecting_works_with_inconsistent_old_jobs(self):
+        # Old data: a job in progress on this printer whose request was never paid.
+        unpaid = self.make_request(self.user)
+        PrintJob.objects.create(print_request=unpaid, printer=self.printer, job_status=PrintJob.STATUS_IN_PROGRESS)
+        Printer.objects.filter(pk=self.printer.pk).update(printer_status=Printer.STATUS_BUSY)
+
+        new_key = self.connect_station()
+
+        unpaid.refresh_from_db()
+        self.assertEqual(unpaid.status, PrintRequest.STATUS_AWAITING_PAYMENT)
+        self.assertEqual(PrintJob.objects.get(print_request=unpaid).job_status, PrintJob.STATUS_FAILED)
+        self.assertEqual(self.heartbeat(new_key).status_code, 200)
+
+    def test_jobs_of_unpaid_requests_are_never_handed_out(self):
+        PrintJob.objects.all().delete()
+        unpaid = self.make_request(self.user)
+        PrintJob.objects.create(print_request=unpaid, job_status=PrintJob.STATUS_QUEUED)
+        self.heartbeat(self.key)
+        self.assertEqual(self.next_job(self.key).status_code, 204)
+        self.assertIsNone(services.process_next_print_job())
+
     def test_document_is_described_by_the_schema(self):
         self.client.force_login(self.admin)
         paths = self.client.get(reverse("api_schema"), {"format": "json"}).json()["paths"]

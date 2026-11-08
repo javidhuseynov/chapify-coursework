@@ -538,7 +538,11 @@ def _claimable_jobs(printer=None):
     may also take jobs assigned to any available printer without a print
     station, but never a job waiting for an available print station.
     """
-    queued = PrintJob.objects.filter(job_status=PrintJob.STATUS_QUEUED)
+    # Only jobs of paid requests are ever printed.
+    queued = PrintJob.objects.filter(
+        job_status=PrintJob.STATUS_QUEUED,
+        print_request__status=PrintRequest.STATUS_PAYMENT_CONFIRMED,
+    )
     not_available = Q(printer__isnull=False) & ~Q(printer__printer_status=Printer.STATUS_AVAILABLE)
 
     if printer is not None:
@@ -636,10 +640,22 @@ def finish_print_job(job, success, failure_reason="", actor=None):
             ).update(printer_status=Printer.STATUS_AVAILABLE)
 
         print_request = job.print_request
-        transition(
-            print_request,
-            PrintRequest.STATUS_COMPLETED if success else PrintRequest.STATUS_FAILED,
-        )
+        if print_request.status == PrintRequest.STATUS_PAYMENT_CONFIRMED:
+            transition(
+                print_request,
+                PrintRequest.STATUS_COMPLETED if success else PrintRequest.STATUS_FAILED,
+            )
+        else:
+            # Inconsistent old data (a job whose request is not paid): close the
+            # job and free the printer, but leave the request as it is.
+            audit(
+                AuditLog.EVENT_PRINT_JOB_STATUS_CHANGED,
+                f"Print job #{job.pk} belonged to request #{print_request.pk} in status "
+                f"{print_request.status}; the request was left unchanged.",
+                user=actor,
+                print_request=print_request,
+            )
+            success = False
 
         audit(
             AuditLog.EVENT_PRINT_JOB_STATUS_CHANGED,

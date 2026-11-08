@@ -944,7 +944,11 @@ def admin_printer_station(request, printer_id):
             messages.success(request, f"The print station of {printer.printer_name} was disconnected.")
         return redirect("admin_printers")
 
-    raw_key = stations.issue_station_key(printer, request.user)
+    try:
+        raw_key = stations.issue_station_key(printer, request.user)
+    except services.WorkflowError as error:
+        messages.error(request, f"The print station could not be connected: {error}")
+        return redirect("admin_printers")
     printer.refresh_from_db()
     # The key is rendered directly (not stored in a message or the session) and
     # never shown again.
