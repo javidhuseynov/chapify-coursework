@@ -17,7 +17,7 @@ import random
 import uuid
 from dataclasses import dataclass
 from typing import NoReturn
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
@@ -311,13 +311,18 @@ def initiate_payment(print_request, user):
         if print_request.status == PrintRequest.STATUS_PAYMENT_REJECTED:
             transition(print_request, PrintRequest.STATUS_AWAITING_PAYMENT)
 
-        # Reuse an open attempt for the same amount (e.g. user pressed "Pay" twice).
+        # Reuse an open attempt for the same amount (e.g. user pressed "Pay" twice),
+        # unless its checkout session at the gateway has expired or is about to.
         existing = (
             PaymentTransaction.objects
             .filter(
                 print_request=print_request,
                 payment_status=PaymentTransaction.STATUS_INITIATED,
                 amount=print_request.total_price,
+            )
+            .filter(
+                Q(session_expires_at__isnull=True)
+                | Q(session_expires_at__gt=timezone.now() + timedelta(minutes=2))
             )
             .order_by("-payment_date")
             .first()
@@ -474,6 +479,21 @@ def apply_payment_notification(data):
 
     payment.refresh_from_db()
     return PaymentOutcome(payment, result)
+
+
+def attach_checkout_session(payment, gateway_name, session):
+    """Remember the gateway checkout session of a payment attempt."""
+    PaymentTransaction.objects.filter(
+        pk=payment.pk,
+        payment_status=PaymentTransaction.STATUS_INITIATED,
+    ).update(
+        gateway=gateway_name,
+        gateway_session_id=session.id[:255],
+        checkout_url=session.url[:1000],
+        session_expires_at=datetime.fromtimestamp(session.expires_at, tz=dt_timezone.utc),
+    )
+    payment.refresh_from_db()
+    return payment
 
 
 def is_uuid(value):

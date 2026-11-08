@@ -1,75 +1,86 @@
-"""Chapify's client for the payment gateway.
+"""Payment flow between Chapify and the payment gateway.
 
-Flow (mirrors hosted-checkout gateways such as Stripe Checkout or Paysera):
-
-1. Chapify creates a PaymentTransaction (INITIATED) and sends the payer to the
-   gateway's checkout page with a *signed checkout session* (reference,
-   amount, currency, return URL). The signature stops the payer from changing
-   the amount in the URL.
-2. The payer approves or declines on the gateway's page.
-3. The gateway sends back a *signed payment notification* (to the return URL
-   in the browser, and/or to the server callback URL).
-4. Chapify trusts the result only if the signature is valid, the notification
-   is recent, and reference/amount/currency match the stored attempt
-   (services.apply_payment_notification).
-
-The browser never decides the payment result: without the shared secret a
-notification cannot be forged or altered.
+See printing/payment_gateways.py for the protocol. This module connects it
+to Chapify's pages and to services.apply_payment_notification.
 """
 
-from urllib.parse import urlencode
+from datetime import timedelta
 
-from django.conf import settings
 from django.urls import reverse
-
-from mockgateway import signing
+from django.utils import timezone
 
 from . import services
+from .models import AuditLog, PaymentTransaction
+from .payment_gateways import GatewayUnavailable, InvalidWebhook, get_gateway
 
 
-class InvalidNotification(services.WorkflowError):
-    pass
+def start_checkout(request, payment):
+    """Return the gateway checkout URL for ``payment``, creating the session if needed.
 
+    The gateway is called outside any database transaction.
+    """
+    if (
+        payment.checkout_url
+        and payment.session_expires_at
+        and payment.session_expires_at > timezone.now() + timedelta(minutes=2)
+    ):
+        return payment.checkout_url
 
-def build_checkout_url(request, payment):
-    print_request = payment.print_request
-    session = signing.sign(
-        {
-            "merchant": "chapify",
-            "reference": str(payment.reference),
-            "amount": str(payment.amount),
-            "currency": payment.currency,
-            "description": f"Chapify print request #{print_request.pk}",
-            "return_url": request.build_absolute_uri(reverse("payment_return")),
-        },
-        settings.PAYMENT_GATEWAY_SECRET,
+    gateway = get_gateway()
+    return_url = request.build_absolute_uri(reverse("payment_return"))
+    session = gateway.create_checkout(
+        payment,
+        success_url=f"{return_url}?payment={payment.reference}",
+        cancel_url=f"{return_url}?payment={payment.reference}&cancelled=1",
     )
-    return f"{reverse('mockgateway:checkout')}?{urlencode({'session': session})}"
+    payment = services.attach_checkout_session(payment, gateway.name, session)
+    return payment.checkout_url
 
 
-def verify_notification(token):
-    """Return the notification data or raise InvalidNotification."""
+def refuse(reason, payment=None):
+    services.audit(
+        AuditLog.EVENT_PAYMENT_NOTIFICATION_REFUSED,
+        f"Payment notification refused: {reason}",
+        print_request=payment.print_request if payment else None,
+    )
+    raise services.WorkflowError(f"Payment notification refused: {reason}")
+
+
+def handle_webhook(body, headers):
+    """Verify and apply a webhook. Returns a PaymentOutcome, or None for ignored events."""
     try:
-        return signing.unsign(
-            token,
-            settings.PAYMENT_GATEWAY_SECRET,
-            max_age=settings.PAYMENT_NOTIFICATION_MAX_AGE_SECONDS,
-        )
-    except signing.ExpiredSignature:
-        services.audit(
-            services.AuditLog.EVENT_PAYMENT_NOTIFICATION_REFUSED,
-            "Payment notification refused: notification has expired.",
-        )
-        raise InvalidNotification("Payment notification refused: notification has expired.")
-    except signing.BadSignature:
-        services.audit(
-            services.AuditLog.EVENT_PAYMENT_NOTIFICATION_REFUSED,
-            "Payment notification refused: invalid signature.",
-        )
-        raise InvalidNotification("Payment notification refused: invalid signature.")
+        result = get_gateway().parse_webhook(body, headers)
+    except InvalidWebhook as error:
+        refuse(str(error))
+
+    if result is None:
+        return None
+    return services.apply_payment_notification(result.as_notification())
 
 
-def handle_notification(token):
-    """Verify and apply a gateway notification. Raises WorkflowError on refusal."""
-    data = verify_notification(token)
-    return services.apply_payment_notification(data)
+def confirm_on_return(payment_reference, session_id):
+    """The payer came back: ask the gateway (server to server) for the result.
+
+    Returns (payment, outcome); outcome is None while the gateway has no
+    final result yet.
+    """
+    payment = (
+        PaymentTransaction.objects.select_related("print_request").filter(reference=payment_reference).first()
+        if services.is_uuid(payment_reference)
+        else None
+    )
+
+    if payment is None or not session_id or payment.gateway_session_id != session_id:
+        refuse("the returning payer's session does not match a payment attempt.", payment)
+
+    result = get_gateway(payment.gateway or None).retrieve(session_id)
+    if result is None:
+        return payment, None
+
+    if result.reference != str(payment.reference):
+        refuse(f"gateway session {session_id[:40]} belongs to another payment.", payment)
+
+    return payment, services.apply_payment_notification(result.as_notification())
+
+
+__all__ = ["GatewayUnavailable", "confirm_on_return", "handle_webhook", "start_checkout"]

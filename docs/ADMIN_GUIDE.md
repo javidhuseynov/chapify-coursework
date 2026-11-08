@@ -32,7 +32,8 @@ pages and the total confirmed amount.
 
 ### Processing the queue
 
-Either press **Print next job** for each job, or start the simulated print server in a
+Printers connected to a **print station** (section 5) take their jobs by themselves. For printers
+without a station, press **Print next job** for each job, or start the built-in simulator in a
 second command window (with the virtual environment activated):
 
 ```bat
@@ -51,8 +52,8 @@ already been deleted. Payments are not refunded automatically.
 ## 3. Users
 
 - Search by username or email; filter by account status.
-- **Block**: the user can no longer log in, any open session ends immediately and their API token
-  is deleted. Their existing requests stay in the system.
+- **Block**: the user can no longer log in, any open session ends immediately and all their API
+  tokens (signed-in apps) are revoked. Their existing requests stay in the system.
 - **Unblock**: access is restored.
 - **Make administrator / Make student**: changes the role.
 - You cannot block or change the role of your own account (prevents locking yourself out).
@@ -65,12 +66,32 @@ Cancelled), Chapify's payment reference and the gateway's transaction id. Filter
 search by username, request number, payment reference or gateway transaction id. The total of
 confirmed payments in the current selection is shown at the top. No card data exists in Chapify.
 
-## 5. Printers
+The payment provider has its own **merchant dashboard** (Chapify Pay, http://127.0.0.1:8001/dashboard/,
+a separate login created with `python manage.py createsuperuser` in the `gateway_service` folder).
+It lists checkout sessions, payments (card brand and last four digits only) and webhook deliveries;
+a webhook that Chapify did not accept (for example because Chapify was stopped) is retried
+automatically, or can be sent again with the action *Send the selected webhooks again*.
+
+## 5. Printers and print stations
 
 - **Add printer**: name and location.
-- **Change status**: Available, Offline or Error. Only *Available* printers receive jobs; jobs
-  wait in the queue while no printer is available. *Busy* is set automatically while a printer is
-  printing and cannot be changed by hand.
+- **Connect a print station**: generates the printer's **station key** and shows it once, with the
+  command to start the station. The printer stays *Offline* until the station connects. The key
+  works only for the printer API and only for this printer's jobs; Chapify stores only its
+  fingerprint (hash). **New station key** replaces it (the old one stops working); **Disconnect**
+  removes it and returns the printer to the built-in simulator.
+- The **Print station** column shows *Connected, last seen …*, the reported paper and toner, the
+  key's first characters and the station version, or *Not responding since …*.
+- A station reports its own status: switched off → *Offline*; jam, no paper or no toner →
+  *Error*. These printers' status cannot be set by hand.
+- If a station stops sending heartbeats for 60 seconds, Chapify marks the printer *Offline* and
+  fails the job it was printing (reason *Print station stopped responding*); use **Print again**.
+- Printers without a station: **Change status** to Available, Offline or Error by hand.
+- Only *Available* printers receive jobs; jobs wait in the queue while no printer is available.
+  *Busy* is set automatically while a printer is printing.
+
+Command-line alternative: `python manage.py printer_station_key "Library Printer 1"`.
+Starting and operating a station: [print_station/README.md](../print_station/README.md).
 
 ## 6. Audit log
 
@@ -92,8 +113,9 @@ python manage.py cleanup_documents
 python manage.py cleanup_documents --dry-run
 ```
 
-It cancels requests not paid within 24 hours, deletes uploads that never became a request, and
-deletes files of failed jobs older than 24 hours. The period is set by
+It cancels requests not paid within 24 hours, deletes uploads that never became a request,
+deletes files of failed jobs older than 24 hours, and removes API tokens that expired or were
+revoked more than 30 days ago. The period is set by
 `CHAPIFY_DOCUMENT_RETENTION_HOURS` in `.env`.
 
 ## 8. Demonstration data
@@ -113,7 +135,10 @@ In `.env`:
 
 | Setting | Purpose |
 |---|---|
-| `CHAPIFY_SECRET_KEY`, `CHAPIFY_PAYMENT_GATEWAY_SECRET` | Long random values; with `CHAPIFY_DEBUG=False` Chapify refuses to start with the development defaults |
+| `CHAPIFY_SECRET_KEY`, `CHAPIFY_PAY_API_KEY`, `CHAPIFY_PAY_WEBHOOK_SECRET` | Long random values; with `CHAPIFY_DEBUG=False` Chapify refuses to start with the development defaults |
+| `CHAPIFY_API_TOKEN_TTL_HOURS` | Lifetime of API tokens (default 168 = 7 days) |
+| `CHAPIFY_PRINT_STATION_TIMEOUT_SECONDS` | Silence after which a print station counts as stopped (default 60) |
+| `CHAPIFY_PAYMENT_GATEWAY=stripe` + `CHAPIFY_STRIPE_SECRET_KEY`, `CHAPIFY_STRIPE_WEBHOOK_SECRET` | Use Stripe in test mode instead of Chapify Pay (only `sk_test_` keys are accepted) |
 | `CHAPIFY_DEBUG=False` | Never show debug pages on a shared server |
 | `CHAPIFY_ALLOWED_HOSTS` | The server's host name |
 | `CHAPIFY_HTTPS=True` | HTTPS-only cookies, redirect to HTTPS, HSTS (only behind a working TLS certificate) |

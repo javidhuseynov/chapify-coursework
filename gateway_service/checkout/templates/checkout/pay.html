@@ -1,0 +1,40 @@
+{% extends "checkout/base.html" %}
+
+{% block title %}Pay {{ session.amount }} {{ session.currency }}{% endblock %}
+
+{% block content %}
+<p class="merchant">Pay {{ merchant }}</p>
+<p class="amount">{{ session.amount }} <span>{{ session.currency }}</span></p>
+<p class="desc">{{ session.description }}</p>
+
+{% if form.non_field_errors %}<div class="alert">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+
+<form method="post" class="card-form" novalidate>
+  {% csrf_token %}
+  {% for field in form %}
+  <div class="field field-{{ field.name }}{% if field.errors %} has-error{% endif %}">
+    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+    {{ field }}
+    {% if field.errors %}<p class="field-error">{{ field.errors|join:" " }}</p>{% endif %}
+  </div>
+  {% endfor %}
+  <button type="submit" class="pay-button">Pay {{ session.amount }} {{ session.currency }}</button>
+</form>
+
+<form method="post" action="{% url 'cancel' session.id %}" class="cancel-form">
+  {% csrf_token %}
+  <button type="submit" class="link-button">Cancel and return to {{ merchant }}</button>
+</form>
+
+<details class="test-cards">
+  <summary>Test card numbers</summary>
+  <p>Use any name, any future expiry date and any 3-digit security code.</p>
+  <table>
+    {% for number, brand, result in cards %}
+    <tr><td class="mono">{{ number }}</td><td>{{ brand }}</td><td>{{ result }}</td></tr>
+    {% endfor %}
+  </table>
+</details>
+
+<p class="ref">Session {{ session.id }} · expires {{ session.expires_at|date:"H:i" }} UTC</p>
+{% endblock %}

@@ -52,3 +52,5 @@ project_tree.txt
 openapi-schema.yaml
 print_station_receipts/
 station.key
+gateway_service/gateway.sqlite3
+gateway_service/staticfiles/

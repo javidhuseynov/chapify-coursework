@@ -1,10 +1,10 @@
-"""Pure-logic tests (no database): price formula and signed messages."""
+"""Pure-logic tests (no database): price formula and webhook signatures."""
 
 from decimal import Decimal
 
 from django.test import SimpleTestCase
 
-from mockgateway import signing
+from printing.payment_gateways import InvalidWebhook, signature_header, verify_signature
 from printing.pricing import calculate_page_price, calculate_total_price
 
 
@@ -37,35 +37,37 @@ class PriceCalculationTests(SimpleTestCase):
             calculate_total_price(1, 1, "SEPIA", "A4", "ONE_SIDED")
 
 
-class SigningTests(SimpleTestCase):
-    SECRET = "test-secret"
+class WebhookSignatureTests(SimpleTestCase):
+    SECRET = "whsec_test"
+    BODY = b'{"type": "checkout.session.completed", "amount": "4.00"}'
 
-    def test_round_trip(self):
-        token = signing.sign({"reference": "abc", "amount": "4.00"}, self.SECRET)
-        data = signing.unsign(token, self.SECRET)
-        self.assertEqual(data["reference"], "abc")
-        self.assertEqual(data["amount"], "4.00")
-        self.assertIn("issued_at", data)
+    def verify(self, header, body=BODY, secret=SECRET, now=1_000_000):
+        verify_signature(header, body, secret, tolerance=300, now=now)
+
+    def test_valid_signature(self):
+        self.verify(signature_header(self.SECRET, self.BODY, timestamp=1_000_000))
 
     def test_modified_body_is_rejected(self):
-        token = signing.sign({"amount": "4.00"}, self.SECRET)
-        body, signature = token.split(".")
-        forged_body = signing.sign({"amount": "0.01"}, "other").split(".")[0]
-        with self.assertRaises(signing.BadSignature):
-            signing.unsign(f"{forged_body}.{signature}", self.SECRET)
+        header = signature_header(self.SECRET, self.BODY, timestamp=1_000_000)
+        with self.assertRaises(InvalidWebhook):
+            self.verify(header, body=self.BODY.replace(b"4.00", b"0.01"))
 
     def test_wrong_secret_is_rejected(self):
-        token = signing.sign({"amount": "4.00"}, "attacker-secret")
-        with self.assertRaises(signing.BadSignature):
-            signing.unsign(token, self.SECRET)
+        with self.assertRaises(InvalidWebhook):
+            self.verify(signature_header("attacker", self.BODY, timestamp=1_000_000))
 
-    def test_malformed_tokens_are_rejected(self):
-        for token in ["", "no-dot", ".", "abc.def", None, "ä.ö"]:
-            with self.assertRaises(signing.BadSignature):
-                signing.unsign(token, self.SECRET)
+    def test_old_or_future_timestamp_is_rejected(self):
+        for timestamp in (1_000_000 - 301, 1_000_000 + 301):
+            with self.assertRaises(InvalidWebhook):
+                self.verify(signature_header(self.SECRET, self.BODY, timestamp=timestamp))
 
-    def test_expired_token_is_rejected(self):
-        token = signing.sign({"amount": "4.00"}, self.SECRET, issued_at=1_000)
-        with self.assertRaises(signing.ExpiredSignature):
-            signing.unsign(token, self.SECRET, max_age=60, now=2_000)
-        self.assertEqual(signing.unsign(token, self.SECRET, max_age=60, now=1_030)["amount"], "4.00")
+    def test_timestamp_cannot_be_changed(self):
+        header = signature_header(self.SECRET, self.BODY, timestamp=900_000)
+        forged = header.replace("t=900000", "t=1000000")
+        with self.assertRaises(InvalidWebhook):
+            self.verify(forged)
+
+    def test_malformed_headers_are_rejected(self):
+        for header in ("", None, "v1=abc", "t=1000000", "t=abc,v1=def", "garbage"):
+            with self.assertRaises(InvalidWebhook):
+                self.verify(header)

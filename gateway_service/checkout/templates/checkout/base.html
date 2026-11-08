@@ -1,0 +1,22 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Chapify Pay{% endblock %} – Chapify Pay</title>
+  <link rel="icon" href="{% static 'checkout/icon.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'checkout/gateway.css' %}">
+</head>
+<body>
+  <main class="checkout{% block width %}{% endblock %}">
+    <div class="checkout-top">
+      <span class="provider"><span class="lock" aria-hidden="true"></span>Chapify Pay</span>
+      <span class="test-badge">Test mode</span>
+    </div>
+    <div class="checkout-body">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+  <p class="footer">Chapify Pay is a test payment gateway. No real money is moved and no card data is stored.</p>
+</body>
+</html>

@@ -17,7 +17,5 @@ urlpatterns = [
     path("api/printer/jobs/<int:job_id>/fail/", printer_api.fail_job, name="printer_api_fail"),
     path("api/schema/", ApiSchemaView.as_view(), name="api_schema"),
     path("api/docs/", ApiDocsView.as_view(url_name="api_schema"), name="api_docs"),
-    # Simulated external payment gateway (would be a third-party site in production).
-    path("mock-gateway/", include("mockgateway.urls")),
     path("", include("printing.urls")),
 ]

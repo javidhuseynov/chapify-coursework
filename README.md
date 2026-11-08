@@ -9,11 +9,34 @@ A user uploads a document, chooses print settings, sees the calculated price, pa
 payment gateway and follows the print job until it is printed. Administrators monitor the
 print queue, payments, printers and the audit log.
 
-- **Payment:** a simulated external gateway ("Chapify Pay - test mode", `mockgateway` app).
-  Chapify only accepts payment results that carry the gateway's valid HMAC-SHA256 signature.
-- **Printing:** a simulated print server (queue + `run_print_simulator` command, or a button on
-  the admin dashboard). No physical printer is needed.
-- **Stack:** Python 3.12+, Django 6.1, Django REST Framework, SQLite; own CSS/JS served by the app (no CDN).
+The system consists of **three separate applications** that talk to each other only over HTTP:
+
+```
+                      ┌───────────────────────────── browser ─────────────────────────────┐
+                      │  students and administrators                payers (card form)     │
+                      └──────────────┬──────────────────────────────────────┬─────────────┘
+                                     │                                      │
+   ┌─────────────────────────────────▼──────────┐   checkout API    ┌───────▼────────────────────┐
+   │ Chapify  (this folder, port 8000)          │ ────────────────► │ Chapify Pay (port 8001)    │
+   │ web app + REST API + OpenAPI docs          │ ◄──────────────── │ gateway_service/           │
+   │ requests, prices, payments, queue, audit   │  signed webhooks  │ test payment gateway       │
+   └─────────────────────────────────▲──────────┘                   └────────────────────────────┘
+                                     │ printer API (station key)
+   ┌─────────────────────────────────┴──────────┐
+   │ Print station  (print_station/)            │   one per printer; window or headless
+   │ takes jobs, downloads PDF, "prints", reports│
+   └────────────────────────────────────────────┘
+```
+
+- **Chapify** (`chapify/`, `printing/`): Python 3.12+, Django 6.1, Django REST Framework, SQLite;
+  own CSS/JS (no CDN); OpenAPI 3 schema with Swagger UI at `/api/docs/`.
+- **Chapify Pay** (`gateway_service/`): separate Django project with its own database, playing an
+  external payment provider: checkout sessions, hosted card page (test cards only), signed
+  webhooks with retries, merchant dashboard. A **Stripe test-mode** adapter can be used instead.
+  See [gateway_service/README.md](gateway_service/README.md).
+- **Print station** (`print_station/`): standard-library program with a window, one per printer,
+  authenticated with a printer key. See [print_station/README.md](print_station/README.md).
+  Printers without a station are driven by Chapify's built-in simulator.
 
 **Documentation:** [User guide](docs/USER_GUIDE.md) · [Administrator guide](docs/ADMIN_GUIDE.md) ·
 [Requirement-to-test traceability](docs/TRACEABILITY.md) · [Security checklist](docs/SECURITY_CHECKLIST.md). This README is the developer guide.
@@ -43,26 +66,39 @@ python manage.py createsuperuser
 ```
 
 In `.env`, replace each `<placeholder>` with a random value from
-`python -c "import secrets; print(secrets.token_urlsafe(50))"`. `.env` is never committed.
-The account created with `createsuperuser` becomes a Chapify administrator.
+`python -c "import secrets; print(secrets.token_urlsafe(50))"` (keep the `sk_test_` and `whsec_`
+prefixes). `.env` is never committed. The gateway reads the same file, so both sides agree on the
+API key and webhook secret. The account created with `createsuperuser` becomes a Chapify administrator.
 
-### Every session
+### Every session: start everything
+
+```bat
+cd chapify-coursework
+start_demo.bat
+```
+
+`start_demo.bat` applies migrations for both applications and opens a window for each server:
+Chapify on http://127.0.0.1:8000/ and Chapify Pay on http://127.0.0.1:8001/. To also start a
+print station, connect a printer first (**Printers → Connect a print station**), then in a new
+Command Prompt window:
 
 ```bat
 cd chapify-coursework
 venv\Scripts\activate.bat
-python manage.py runserver
+set CHAPIFY_STATION_KEY=<the key shown in Chapify>
+python -m print_station
 ```
 
-The prompt shows `(venv)` when the environment is active. Open http://127.0.0.1:8000/
-(application) and http://127.0.0.1:8000/admin/ (Django admin).
-
-Optional second cmd window (activate the venv there too) to process the print queue automatically:
+The same by hand, one window each (activate the venv in every window):
 
 ```bat
-python manage.py run_print_simulator
-python manage.py run_print_simulator --fail-rate 0.3
+python manage.py runserver
+cd gateway_service && python manage.py runserver 127.0.0.1:8001
+python -m print_station --server http://127.0.0.1:8000
 ```
+
+Printers without a print station are processed by the built-in simulator: **Print next job** on
+the administrator Overview, or `python manage.py run_print_simulator` in another window.
 
 (PowerShell users: activate with `.\venv\Scripts\Activate.ps1` and copy with `Copy-Item`.)
 
@@ -86,22 +122,27 @@ normal setup: migrations are part of the repository.
 Optional: fill the database first with `python manage.py seed_demo --password <choose-a-password>`
 (demo accounts `demo_admin`, `demo_student`, `demo_student2` and requests in every state).
 
-1. Register a user (or log in) and choose **Print a document**.
-2. Upload a PDF (max 5 MB, not password-protected). The page count is read from the file; choose copies, color, paper size and sides; the price estimate updates as you choose.
-3. On the payment page press **Pay**. You are sent to the Chapify Pay test checkout.
-4. Choose **Approve payment** (or **Decline** to see the retry path).
-5. Back in Chapify, the request is *Payment confirmed* and the print job is *Queued*.
-6. Log in as the administrator, open **Overview** and press **Print next job**
-   (tick *Simulate a printer fault* to demonstrate a failed job), or run `run_print_simulator`.
-7. The user's request becomes *Completed* (or *Failed*); the uploaded file has been deleted.
-8. **Audit log** (and *Recent activity* on Overview) shows every step.
+1. As the administrator, open **Printers**, press **Connect a print station** next to *Library
+   Printer 1* and start the print station with the key (see above). Its window shows *Ready*.
+2. Register a user (or log in) and choose **Print a document**.
+3. Upload a PDF (max 5 MB, not password-protected). The page count is read from the file; choose
+   copies, color, paper size and sides; the price estimate updates as you choose.
+4. On the payment page press **Pay**. The browser goes to the Chapify Pay checkout (port 8001).
+5. Pay with test card `4242 4242 4242 4242` (any name, future date, 3 digits), or with
+   `4000 0000 0000 9995` to see a declined payment and the retry path.
+6. Back in Chapify, the request is *Payment confirmed* and the print job *Queued*.
+7. The print station takes the job within a few seconds: its window shows the progress, paper and
+   toner. Tick *Jam the next job* to demonstrate a failure, then *Clear jam* and **Print again**.
+8. The user's request becomes *Completed* (or *Failed*); the uploaded file has been deleted.
+9. **Audit log** in Chapify shows every step; the gateway's dashboard
+   (http://127.0.0.1:8001/dashboard/) shows the payment and the webhook delivery.
 
 ## 3. Request lifecycle
 
 | From | To | Trigger |
 |---|---|---|
-| AWAITING_PAYMENT | PAYMENT_CONFIRMED | gateway notification APPROVED |
-| AWAITING_PAYMENT | PAYMENT_REJECTED | gateway notification DECLINED |
+| AWAITING_PAYMENT | PAYMENT_CONFIRMED | gateway reports the payment as paid |
+| AWAITING_PAYMENT | PAYMENT_REJECTED | gateway reports the card as declined |
 | PAYMENT_REJECTED | AWAITING_PAYMENT | user pays again |
 | AWAITING_PAYMENT / PAYMENT_REJECTED | CANCELLED | user cancels, or not paid within the retention period |
 | PAYMENT_CONFIRMED | COMPLETED | print job completed |
@@ -119,19 +160,29 @@ calculated with exact decimals and rounded half-up to cents (`printing/pricing.p
 
 ## 4. Payment security design
 
-1. When the user presses **Pay**, Chapify creates a `PaymentTransaction` (status `INITIATED`,
-   unique UUID `reference`) and redirects to the gateway with a **signed checkout session**
-   (reference, amount, currency, return URL). Changing the amount in the URL breaks the signature.
-2. The gateway returns a **signed notification** (reference, amount, currency, APPROVED/DECLINED,
-   gateway transaction id). It is delivered to `/payments/return/` (browser) and can also be
-   delivered server-to-server to `/payments/callback/` (webhook).
-3. Chapify accepts the notification only if: the signature is valid, it is at most 15 minutes old,
-   the reference exists and is still `INITIATED`, and amount and currency match.
-4. Status changes are atomic conditional updates; a replayed notification is recognised as a
-   duplicate; a database constraint allows at most one confirmed payment per request.
-5. Refused notifications are written to the audit log (`PAYMENT_NOTIFICATION_REFUSED`).
+Details and a sequence diagram: [gateway_service/README.md](gateway_service/README.md).
 
-No endpoint lets a user confirm a payment. Chapify never sees card data.
+1. **Pay** creates a `PaymentTransaction` (`INITIATED`, unique UUID `reference`). Chapify then
+   creates a **checkout session** at the gateway, server to server, authenticated with its secret
+   API key, with the amount and currency taken from the database. The browser never carries the
+   amount, so it cannot change it.
+2. The payer enters a card on the **gateway's** page. Chapify never sees card data.
+3. The gateway reports the result in a **signed webhook** to `/payments/webhook/`:
+   header `Chapify-Pay-Signature: t=<time>,v1=<HMAC-SHA256(webhook secret, "<time>.<body>")>`.
+   Chapify accepts it only if the signature is valid and at most 5 minutes old (replay protection).
+4. When the payer returns, Chapify **asks the gateway's API** for the session result, so the
+   payment is recorded even if the webhook is late. The return URL itself proves nothing.
+5. A result is applied only if the reference exists and is still `INITIATED` and amount and
+   currency match. Status changes are atomic conditional updates; a repeated webhook is a
+   duplicate; a database constraint allows at most one confirmed payment per request.
+6. Refused notifications are written to the audit log (`PAYMENT_NOTIFICATION_REFUSED`).
+
+No endpoint lets a user confirm a payment. With `CHAPIFY_PAYMENT_GATEWAY=stripe` the same flow
+uses Stripe Checkout in **test mode**: `CHAPIFY_STRIPE_SECRET_KEY` must be a `sk_test_` key (live
+keys are refused at start-up and live-mode events are rejected) and `CHAPIFY_STRIPE_WEBHOOK_SECRET`
+is the signing secret, for example from `stripe listen --forward-to 127.0.0.1:8000/payments/webhook/`.
+The Stripe adapter is covered by tests with Stripe's documented formats; it has not yet been run
+against a live Stripe test account.
 
 Other protections: login lockout after 5 failed attempts per username + IP for 15 minutes (web
 and API), sessions expire after 8 hours or at browser close, Chapify refuses to start with
@@ -158,7 +209,7 @@ Administrator pages (side menu):
 |---|---|
 | Overview | Counters, print queue, *Print next job*, *Print again* for failed jobs, printers, recent activity |
 | Requests | All requests from all users, searchable and filterable |
-| Printers | Add printers, set Available / Offline / Error (only Available printers receive jobs) |
+| Printers | Add printers; connect a print station (key shown once), see its connection, paper and toner; set Available / Offline / Error for printers without a station |
 | Users | Search accounts, block/unblock, make administrator/student (not your own account) |
 | Payments | All payment attempts with status, payment reference and gateway transaction |
 | Audit log | Every recorded event, filterable by type |
@@ -196,7 +247,7 @@ Users see and revoke their signed-in apps on the **Account** page.
 | POST | `/api/requests/create/` | Create a request (multipart: `file` (PDF), `copies`, `color_mode` BW/COLOR, `paper_format` A4/A3, `duplex_mode` ONE_SIDED/DOUBLE_SIDED). Pages are counted from the PDF. |
 | POST | `/api/requests/<id>/payment/` | Start a payment; returns `checkout_url` for the payer |
 | POST | `/api/requests/<id>/cancel/` | Cancel an unpaid request |
-| POST | `/payments/callback/` | Gateway webhook (form field or JSON `notification`; no login, signature-verified) |
+| POST | `/payments/webhook/` | Gateway webhook (no login; verified by the `Chapify-Pay-Signature` or `Stripe-Signature` header) |
 | GET | `/api/admin/summary/`, `requests/`, `transactions/`, `print-jobs/`, `printers/`, `audit-logs/` | Administrator only |
 | POST/GET | `/api/printer/heartbeat/`, `jobs/next/`, `jobs/<id>/document/`, `jobs/<id>/complete/`, `jobs/<id>/fail/` | Print stations only (`Authorization: Printer <key>`), see [print_station/README.md](print_station/README.md) |
 
@@ -208,7 +259,7 @@ curl -H "Authorization: Token <token>" -F "file=@report.pdf" -F "copies=2" -F "c
 curl -H "Authorization: Token <token>" -X POST http://127.0.0.1:8000/api/requests/<id>/payment/
 ```
 
-Open the returned `checkout_url` in a browser to approve or decline the payment.
+Open the returned `checkout_url` in a browser and pay with a test card (for example `4242 4242 4242 4242`). A mobile app would open the same page in the system browser.
 
 ## 7. Management commands
 
@@ -225,28 +276,42 @@ Open the returned `checkout_url` in a browser to approve or decline the payment.
 python manage.py test
 ```
 
-GitHub Actions runs the same checks (`check`, `makemigrations --check`, `test`) automatically on
-every push to `main` and every pull request, on Windows and Linux with Python 3.12 and 3.13
-(`.github/workflows/tests.yml`). Results: repository → **Actions** tab.
+The gateway has its own tests: `cd gateway_service` then `python manage.py test`.
 
-Test modules (`printing/tests/`): pricing and signatures, workflow rules, payment security
-(tampering, replay, amount mismatch, expiry, no self-confirmation), print queue and retention,
-access control (IDOR, authentication, administrator RBAC).
+GitHub Actions runs on every push to `main` and every pull request, on Windows and Linux with
+Python 3.12 and 3.13 (`.github/workflows/tests.yml`): `check`, `makemigrations --check`, the
+Chapify and print station tests, OpenAPI schema validation, the gateway's tests, `pip-audit` and
+`check --deploy`. A second workflow (`screenshots.yml`) starts all three applications, pays with
+test cards in a real browser, connects a print station through the admin pages, runs its window
+on a virtual display, fails on any Content-Security-Policy violation, and publishes screenshots to
+the `ci-screenshots` branch.
+
+Test modules: `printing/tests/` (pricing and webhook signatures, workflow rules, payments through
+a fake gateway, Stripe adapter, API tokens and OpenAPI, print queue and retention, print stations
+including the real station program against a live test server, access control, security headers),
+`print_station/tests/` (simulated printer), `gateway_service/checkout/tests/` (gateway API,
+card page, webhook signing and retries).
 
 ## 9. Project structure
 
 ```
-chapify/            settings (env-driven), root URLs, .env loader
-printing/           Chapify application
-  models.py         data model
-  pricing.py        price formula (Decimal)
-  services.py       workflow rules: status transitions, payments, print jobs, retention
-  payments.py       Chapify side of the gateway integration (checkout session, notification check)
-  permissions.py    administrator rule (RBAC)
-  views.py          web pages and REST API
-  management/       run_print_simulator, cleanup_documents
-  tests/            automated tests
-mockgateway/        simulated external payment gateway (test-mode checkout page)
-  signing.py        signed message format (HMAC-SHA256), shared with Chapify
-private_media/      uploaded documents (git-ignored, never served over HTTP)
+chapify/              settings (env-driven), root URLs, .env loader
+printing/             Chapify application
+  models.py           data model
+  pricing.py          price formula (Decimal)
+  services.py         workflow rules: status transitions, payments, print jobs, retention
+  payment_gateways.py gateway clients (Chapify Pay, Stripe test mode), webhook signature check
+  payments.py         payment flow: checkout, return, webhook
+  stations.py         print stations: keys, heartbeats, job hand-out, watchdog
+  printer_api.py      printer API for print stations
+  api_tokens.py       expiring, revocable API tokens; api_auth.py: token endpoints
+  api_docs.py         OpenAPI schema and Swagger UI
+  permissions.py      administrator rule (RBAC)
+  views.py            web pages and REST API
+  management/         run_print_simulator, cleanup_documents, seed_demo, printer_station_key
+  tests/              automated tests
+gateway_service/      Chapify Pay: separate Django project (test payment gateway, port 8001)
+print_station/        print station program (one per printer)
+start_demo.bat        starts Chapify and the gateway (and a print station if a key is set)
+private_media/        uploaded documents (git-ignored, never served over HTTP)
 ```

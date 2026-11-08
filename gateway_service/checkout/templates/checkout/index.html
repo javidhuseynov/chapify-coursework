@@ -1,0 +1,16 @@
+{% extends "checkout/base.html" %}
+
+{% block title %}Test gateway{% endblock %}
+{% block width %} checkout-wide{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Chapify Pay test gateway</h1>
+<p>This server plays the role of an external payment provider for Chapify. Merchants create checkout sessions through its API; payers pay on its hosted page; results are sent to the merchant in signed webhooks.</p>
+<h2>Test cards</h2>
+<table class="cards-table">
+  {% for number, brand, result in cards %}
+  <tr><td class="mono">{{ number }}</td><td>{{ brand }}</td><td>{{ result }}</td></tr>
+  {% endfor %}
+</table>
+<p class="small">Merchant dashboard: <a href="{% url 'admin:index' %}">/dashboard/</a> (create a login with <code>python manage.py createsuperuser</code> in this folder).</p>
+{% endblock %}

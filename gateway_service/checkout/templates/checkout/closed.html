@@ -1,0 +1,11 @@
+{% extends "checkout/base.html" %}
+
+{% block title %}Checkout closed{% endblock %}
+
+{% block content %}
+<div class="result">
+  <h1>{% if session.status == "expired" %}This checkout has expired{% elif session.status == "canceled" %}This checkout was cancelled{% else %}This checkout is closed{% endif %}</h1>
+  <p>Return to the merchant and start the payment again.</p>
+</div>
+<a class="pay-button" href="{{ session.cancel_url }}">Return to the merchant</a>
+{% endblock %}

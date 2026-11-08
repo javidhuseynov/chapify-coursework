@@ -11,6 +11,7 @@ from playwright.sync_api import sync_playwright
 from pypdf import PdfWriter
 
 BASE = "http://127.0.0.1:8000"
+GATEWAY = "http://127.0.0.1:8001"
 PASSWORD = "Demo-pass-2026"
 OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "screenshots")
 OUT.mkdir(parents=True, exist_ok=True)
@@ -38,6 +39,17 @@ def login(page, username):
     page.fill("#id_username", username)
     page.fill("#id_password", PASSWORD)
     page.press("#id_password", "Enter")
+    page.wait_for_load_state("networkidle")
+
+
+def pay_with_card(page, number):
+    """Fill in the card form on the Chapify Pay checkout page and pay."""
+    assert page.url.startswith(GATEWAY), page.url
+    page.fill("#id_name", "Demo Student")
+    page.fill("#id_number", number)
+    page.fill("#id_expiry", "12/30")
+    page.fill("#id_cvc", "123")
+    page.click("button.pay-button")
     page.wait_for_load_state("networkidle")
 
 
@@ -74,9 +86,18 @@ def run(browser, prefix, viewport):
     page.click("main form button[type=submit]")
     page.wait_for_load_state("networkidle")
     shoot(page, f"{prefix}13-gateway")
-    page.click("button[value=approve]")
-    page.wait_for_load_state("networkidle")
+    pay_with_card(page, "4242 4242 4242 4242")
     shoot(page, f"{prefix}14-after-payment")
+    if prefix == "desktop-":
+        # Request 5 (seed data) is waiting for payment: pay it with a card that is declined.
+        page.goto(BASE + "/payment/5/")
+        page.click("main form button[type=submit]")
+        page.wait_for_load_state("networkidle")
+        pay_with_card(page, "4000 0000 0000 9995")
+        shoot(page, f"{prefix}16-gateway-declined")
+        page.click("a.pay-button")
+        page.wait_for_load_state("networkidle")
+        shoot(page, f"{prefix}17-after-decline")
     shoot(page, f"{prefix}15-404", "/no-such-page/")
     context.clear_cookies()
 
@@ -121,6 +142,20 @@ def station_result(browser):
     shoot(page, "desktop-33-printers-with-station", "/admin-printers/")
     shoot(page, "desktop-34-overview-with-station", "/admin-dashboard/")
     shoot(page, "desktop-35-audit-with-station", "/admin-audit/?status=PRINT_STATION")
+    shoot(page, "desktop-36-admin-payments", "/admin-transactions/")
+
+    # The gateway's own merchant dashboard (separate application and login).
+    page.goto(GATEWAY + "/dashboard/login/")
+    page.fill("#id_username", "gateway_admin")
+    page.fill("#id_password", PASSWORD)
+    page.press("#id_password", "Enter")
+    page.wait_for_load_state("networkidle")
+    page.goto(GATEWAY + "/dashboard/checkout/checkoutsession/")
+    shoot(page, "desktop-40-gateway-sessions")
+    page.goto(GATEWAY + "/dashboard/checkout/webhookevent/")
+    shoot(page, "desktop-41-gateway-webhooks")
+    page.goto(GATEWAY + "/")
+    shoot(page, "desktop-42-gateway-home")
     context.close()
 
 

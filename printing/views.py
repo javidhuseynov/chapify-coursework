@@ -390,11 +390,12 @@ def payment(request, request_id):
     if request.method == "POST":
         try:
             payment_attempt = services.initiate_payment(print_request, request.user)
+            checkout_url = payments.start_checkout(request, payment_attempt)
         except services.WorkflowError as error:
             messages.error(request, str(error))
-            return redirect("request_status", request_id=print_request.id)
+            return redirect("payment", request_id=print_request.id)
 
-        return redirect(payments.build_checkout_url(request, payment_attempt))
+        return redirect(checkout_url)
 
     return render(
         request,
@@ -406,50 +407,68 @@ def payment(request, request_id):
     )
 
 
+@login_required
 @require_GET
 def payment_return(request):
-    """Return URL: the gateway sends the payer back here with a signed result."""
-    token = request.GET.get("notification", "")
+    """The payer comes back from the gateway's checkout page.
+
+    The URL only says which payment to look at. The result is read from the
+    gateway's API (server to server), never taken from the URL.
+    """
+    reference = request.GET.get("payment", "")
+
+    if request.GET.get("cancelled"):
+        payment_attempt = PaymentTransaction.objects.filter(
+            reference=reference if services.is_uuid(reference) else None,
+            print_request__user=request.user,
+        ).first()
+        messages.info(request, "Payment cancelled. You have not been charged.")
+        if payment_attempt is None:
+            return redirect("request_history")
+        return redirect("payment", request_id=payment_attempt.print_request_id)
 
     try:
-        outcome = payments.handle_notification(token)
+        payment_attempt, outcome = payments.confirm_on_return(reference, request.GET.get("session_id", ""))
+    except payments.GatewayUnavailable as error:
+        messages.warning(request, f"{error} Your payment status will update automatically.")
+        return redirect("request_history")
     except services.WorkflowError as error:
         messages.error(request, str(error))
         return redirect("request_history")
 
-    if outcome.payment.payment_status == PaymentTransaction.STATUS_CONFIRMED:
-        messages.success(request, "Payment confirmed by the gateway. Your print job is in the queue.")
-    else:
-        messages.warning(request, "The payment was declined by the gateway. You can try again or cancel the request.")
+    if payment_attempt.print_request.user_id != request.user.id:
+        return redirect("request_history")
 
-    return redirect("request_status", request_id=outcome.payment.print_request_id)
+    payment_attempt.refresh_from_db()
+    if payment_attempt.payment_status == PaymentTransaction.STATUS_CONFIRMED:
+        messages.success(request, "Payment confirmed by the payment service. Your print job is in the queue.")
+    elif payment_attempt.payment_status == PaymentTransaction.STATUS_REJECTED:
+        messages.warning(request, "The payment was declined. You can try again or cancel the request.")
+    else:
+        messages.info(request, "The payment service has not confirmed the payment yet. This page updates when it does.")
+
+    return redirect("request_status", request_id=payment_attempt.print_request_id)
 
 
 @csrf_exempt
 @require_POST
-def payment_callback(request):
-    """Server-to-server notification endpoint for the gateway (webhook).
+def payment_webhook(request):
+    """Server-to-server notification from the payment gateway (webhook).
 
-    Accepts the signed notification as form field "notification" or as JSON
-    {"notification": "..."}. CSRF protection is not applicable here because
-    the request is authenticated by its HMAC signature, not by a session.
+    Authenticated by the HMAC signature in the request header (not by a
+    session), so CSRF protection does not apply.
     """
-    token = request.POST.get("notification", "")
-
-    if not token and request.content_type == "application/json":
-        try:
-            token = json.loads(request.body or b"{}").get("notification", "")
-        except (ValueError, AttributeError):
-            token = ""
-
     try:
-        outcome = payments.handle_notification(token)
+        outcome = payments.handle_webhook(request.body, request.headers)
     except services.WorkflowError as error:
-        return JsonResponse({"accepted": False, "detail": str(error)}, status=400)
+        return JsonResponse({"received": False, "detail": str(error)}, status=400)
+
+    if outcome is None:
+        return JsonResponse({"received": True, "result": "ignored"})
 
     return JsonResponse(
         {
-            "accepted": True,
+            "received": True,
             "result": outcome.result,
             "payment_reference": str(outcome.payment.reference),
             "payment_status": outcome.payment.payment_status,
@@ -1067,7 +1086,12 @@ def api_create_print_request(request):
         "The request becomes paid only when the gateway confirms the payment."
     ),
     request=None,
-    responses={201: PaymentStartSerializer, 404: OpenApiResponse(ErrorSerializer), 409: OpenApiResponse(ConflictSerializer, description="The request cannot be paid now.")},
+    responses={
+        201: PaymentStartSerializer,
+        404: OpenApiResponse(ErrorSerializer),
+        409: OpenApiResponse(ConflictSerializer, description="The request cannot be paid now."),
+        503: OpenApiResponse(ErrorSerializer, description="The payment gateway cannot be reached."),
+    },
 )
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -1084,15 +1108,18 @@ def api_initiate_payment(request, request_id):
     except services.WorkflowError as error:
         return Response({"detail": str(error), "current_status": print_request.status}, status=409)
 
+    try:
+        checkout_url = payments.start_checkout(request, payment_attempt)
+    except payments.GatewayUnavailable as error:
+        return Response({"detail": str(error)}, status=503)
+
     return Response(
         {
             "payment_reference": str(payment_attempt.reference),
             "amount": str(payment_attempt.amount),
             "currency": payment_attempt.currency,
             "payment_status": payment_attempt.payment_status,
-            "checkout_url": request.build_absolute_uri(
-                payments.build_checkout_url(request, payment_attempt)
-            ),
+            "checkout_url": checkout_url,
         },
         status=201,
     )

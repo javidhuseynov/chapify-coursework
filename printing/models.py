@@ -203,6 +203,11 @@ class PaymentTransaction(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     # Transaction identifier returned by the gateway (never card data).
     gateway_reference = models.CharField(max_length=100, blank=True)
+    # Checkout session at the gateway (see printing/payment_gateways.py).
+    gateway = models.CharField(max_length=20, blank=True, default="")
+    gateway_session_id = models.CharField(max_length=255, blank=True, default="", db_index=True)
+    checkout_url = models.URLField(max_length=1000, blank=True, default="")
+    session_expires_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
