@@ -15,8 +15,6 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.cache import cache
-from rest_framework.authtoken.views import ObtainAuthToken
-from rest_framework.response import Response
 
 from .models import AuditLog
 
@@ -85,25 +83,3 @@ class ThrottledAuthenticationForm(AuthenticationForm):
 
         reset_failures(username, ip)
         return cleaned_data
-
-
-class ThrottledObtainAuthToken(ObtainAuthToken):
-    """API token endpoint with the same lockout rule."""
-
-    def post(self, request, *args, **kwargs):
-        username = str(request.data.get("username", ""))
-        ip = client_ip(request)
-
-        if username and is_locked(username, ip):
-            audit_blocked_attempt(username, ip)
-            return Response({"detail": lockout_message()}, status=429)
-
-        serializer = self.get_serializer(data=request.data)
-
-        if not serializer.is_valid():
-            if username:
-                register_failure(username, ip)
-            return Response(serializer.errors, status=400)
-
-        reset_failures(username, ip)
-        return super().post(request, *args, **kwargs)

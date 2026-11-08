@@ -72,7 +72,7 @@ class AuthenticationTests(ChapifyTestCase):
         response = self.client.post(
             "/api/auth/token/", {"username": "alice", "password": "Str0ng-test-pass!"}
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 201)
         token = response.json()["token"]
 
         self.client.logout()

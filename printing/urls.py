@@ -16,6 +16,7 @@ urlpatterns = [
     path("history/", views.request_history, name="request_history"),
     path("help/", views.help_page, name="help"),
     path("account/", views.account, name="account"),
+    path("account/tokens/<int:token_id>/revoke/", views.account_revoke_token, name="account_revoke_token"),
 
     path("request/<int:request_id>/edit/", views.edit_print_request, name="edit_print_request"),
     path("request/<int:request_id>/cancel/", views.cancel_print_request, name="cancel_print_request"),

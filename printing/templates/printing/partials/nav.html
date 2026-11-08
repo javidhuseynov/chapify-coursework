@@ -24,6 +24,7 @@
   <div class="nav-group">
     <a href="{% url 'account' %}" {% current 'account' %}>Account</a>
     <a href="{% url 'help' %}" {% current 'help' %}>Prices and help</a>
+    {% if is_chapify_admin %}<a href="{% url 'api_docs' %}">API documentation</a>{% endif %}
     {% if is_chapify_admin and user.is_staff %}<a href="/admin/">Database admin</a>{% endif %}
   </div>
 </nav>

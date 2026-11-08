@@ -19,7 +19,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from . import payments, pricing, services
+from . import api_tokens, payments, pricing, services
 from .forms import DocumentUploadForm, PrintSettingsForm, RegisterForm
 from .models import (
     AuditLog,
@@ -35,9 +35,16 @@ from . import rate_limits
 from .login_protection import ThrottledAuthenticationForm, client_ip
 from .permissions import IsChapifyAdmin, chapify_admin_required, is_chapify_admin
 from .validators import MAX_DOCUMENT_PAGES, MAX_DOCUMENT_SIZE
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+
 from .serializers import (
+    AdminSummarySerializer,
     AuditLogSerializer,
+    ConflictSerializer,
+    CreatePrintRequestResponseSerializer,
     CreatePrintRequestSerializer,
+    ErrorSerializer,
+    PaymentStartSerializer,
     PaymentTransactionSerializer,
     PrintJobSerializer,
     PrintRequestSerializer,
@@ -230,12 +237,33 @@ def account(request):
                 f"User {user.username} changed their password.",
                 user=user,
             )
-            messages.success(request, "Your password has been changed.")
+            revoked = api_tokens.revoke_all_tokens(user, user, "password changed")
+            messages.success(
+                request,
+                "Your password has been changed."
+                + (f" {revoked} signed-in app(s) were logged out." if revoked else ""),
+            )
             return redirect("account")
     else:
         password_form = PasswordChangeForm(request.user)
 
-    return render(request, "printing/account.html", {"password_form": password_form})
+    return render(
+        request,
+        "printing/account.html",
+        {
+            "password_form": password_form,
+            "api_tokens": api_tokens.active_tokens(request.user),
+        },
+    )
+
+
+@login_required
+@require_POST
+def account_revoke_token(request, token_id):
+    token = get_object_or_404(api_tokens.active_tokens(request.user), pk=token_id)
+    api_tokens.revoke_token(token, request.user, "revoked by the user on the Account page")
+    messages.success(request, f"'{token.name}' has been logged out.")
+    return redirect("account")
 
 
 def register(request):
@@ -892,6 +920,14 @@ def admin_retry_print_job(request, job_id):
 # REST API - user endpoints
 # ---------------------------------------------------------------------------
 
+@extend_schema(
+    tags=["Print requests"], summary="List my print requests", operation_id="my_requests_list",
+    parameters=[
+        OpenApiParameter("status", str, description="Only requests with this status code, e.g. AWAITING_PAYMENT."),
+        OpenApiParameter("q", str, description="Search by request number or file name."),
+    ],
+    responses=PrintRequestSerializer(many=True),
+)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def api_my_requests(request):
@@ -905,6 +941,10 @@ def api_my_requests(request):
     return Response(PrintRequestSerializer(print_requests, many=True).data)
 
 
+@extend_schema(
+    tags=["Print requests"], summary="Get one of my print requests", operation_id="my_requests_retrieve",
+    responses={200: PrintRequestSerializer, 404: OpenApiResponse(ErrorSerializer, description="Not found or not yours.")},
+)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def api_request_detail(request, request_id):
@@ -912,6 +952,9 @@ def api_request_detail(request, request_id):
     return Response(PrintRequestSerializer(print_request).data)
 
 
+@extend_schema(
+    tags=["Print requests"], summary="List my payment attempts", responses=PaymentTransactionSerializer(many=True),
+)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def api_my_payments(request):
@@ -921,6 +964,9 @@ def api_my_payments(request):
     return Response(PaymentTransactionSerializer(user_payments, many=True).data)
 
 
+@extend_schema(
+    tags=["Print requests"], summary="List my print jobs", responses=PrintJobSerializer(many=True),
+)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def api_my_print_jobs(request):
@@ -930,6 +976,16 @@ def api_my_print_jobs(request):
     return Response(PrintJobSerializer(jobs, many=True).data)
 
 
+@extend_schema(
+    tags=["Print requests"],
+    summary="Upload a PDF and create a print request",
+    description=(
+        "Multipart upload. The page count is read from the PDF on the server and the "
+        "price is calculated by the server; a client cannot set either."
+    ),
+    request={"multipart/form-data": CreatePrintRequestSerializer},
+    responses={201: CreatePrintRequestResponseSerializer, 400: OpenApiResponse(description="Invalid file or settings.")},
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
@@ -966,6 +1022,16 @@ def api_create_print_request(request):
     )
 
 
+@extend_schema(
+    tags=["Print requests"],
+    summary="Start paying a print request",
+    description=(
+        "Creates a payment attempt and returns the payment gateway's checkout URL. "
+        "The request becomes paid only when the gateway confirms the payment."
+    ),
+    request=None,
+    responses={201: PaymentStartSerializer, 404: OpenApiResponse(ErrorSerializer), 409: OpenApiResponse(ConflictSerializer, description="The request cannot be paid now.")},
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def api_initiate_payment(request, request_id):
@@ -995,6 +1061,10 @@ def api_initiate_payment(request, request_id):
     )
 
 
+@extend_schema(
+    tags=["Print requests"], summary="Cancel an unpaid print request", request=None,
+    responses={200: PrintRequestSerializer, 404: OpenApiResponse(ErrorSerializer), 409: OpenApiResponse(ErrorSerializer, description="The request can no longer be cancelled.")},
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def api_cancel_print_request(request, request_id):
@@ -1016,6 +1086,7 @@ def api_cancel_print_request(request, request_id):
 ADMIN_API_PERMISSIONS = [IsAuthenticated, IsChapifyAdmin]
 
 
+@extend_schema(tags=["Administration"], summary="Totals for the dashboard", responses=AdminSummarySerializer)
 @api_view(["GET"])
 @permission_classes(ADMIN_API_PERMISSIONS)
 def api_admin_summary(request):
@@ -1035,6 +1106,14 @@ def api_admin_summary(request):
     )
 
 
+@extend_schema(
+    tags=["Administration"], summary="List all print requests",
+    parameters=[
+        OpenApiParameter("status", str, description="Only requests with this status code, e.g. AWAITING_PAYMENT."),
+        OpenApiParameter("q", str, description="Search by request number or file name or username."),
+    ],
+    responses=PrintRequestSerializer(many=True),
+)
 @api_view(["GET"])
 @permission_classes(ADMIN_API_PERMISSIONS)
 def api_admin_requests(request):
@@ -1047,6 +1126,7 @@ def api_admin_requests(request):
     return Response(PrintRequestSerializer(print_requests, many=True).data)
 
 
+@extend_schema(tags=["Administration"], summary="List all payment attempts", responses=PaymentTransactionSerializer(many=True))
 @api_view(["GET"])
 @permission_classes(ADMIN_API_PERMISSIONS)
 def api_admin_transactions(request):
@@ -1054,6 +1134,7 @@ def api_admin_transactions(request):
     return Response(PaymentTransactionSerializer(all_payments, many=True).data)
 
 
+@extend_schema(tags=["Administration"], summary="List all print jobs", responses=PrintJobSerializer(many=True))
 @api_view(["GET"])
 @permission_classes(ADMIN_API_PERMISSIONS)
 def api_admin_print_jobs(request):
@@ -1061,6 +1142,7 @@ def api_admin_print_jobs(request):
     return Response(PrintJobSerializer(jobs, many=True).data)
 
 
+@extend_schema(tags=["Administration"], summary="List printers", responses=PrinterSerializer(many=True))
 @api_view(["GET"])
 @permission_classes(ADMIN_API_PERMISSIONS)
 def api_admin_printers(request):
@@ -1068,6 +1150,7 @@ def api_admin_printers(request):
     return Response(PrinterSerializer(printers, many=True).data)
 
 
+@extend_schema(tags=["Administration"], summary="Latest 100 audit log entries", responses=AuditLogSerializer(many=True))
 @api_view(["GET"])
 @permission_classes(ADMIN_API_PERMISSIONS)
 def api_admin_audit_logs(request):

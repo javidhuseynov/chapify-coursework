@@ -2,9 +2,8 @@
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
-from rest_framework.authtoken.models import Token
 
-from printing import services
+from printing import api_tokens, services
 from printing.models import AuditLog, Printer, PrintJob, PrintRequest, Profile
 
 from .base import PASSWORD, ChapifyTestCase
@@ -51,12 +50,13 @@ class AccountBlockingTests(ChapifyTestCase):
         self.assertIn(reverse("login"), response["Location"])
 
     def test_api_token_stops_working_when_blocked(self):
-        token = Token.objects.create(user=self.user)
+        token, raw_token = api_tokens.issue_token(self.user, "phone")
         self.block()
-        self.assertFalse(Token.objects.filter(key=token.key).exists())
+        token.refresh_from_db()
+        self.assertIsNotNone(token.revoked_at)
 
-        response = self.client.get("/api/my/requests/", HTTP_AUTHORIZATION=f"Token {token.key}")
-        self.assertIn(response.status_code, (401, 403))
+        response = self.client.get("/api/my/requests/", HTTP_AUTHORIZATION=f"Token {raw_token}")
+        self.assertEqual(response.status_code, 401)
 
     def test_unblocking_restores_access(self):
         self.block()

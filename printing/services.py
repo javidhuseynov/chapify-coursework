@@ -670,9 +670,9 @@ def set_account_status(target_user, new_status, actor):
         profile.save()  # signals.sync_account_status updates user.is_active
 
         if new_status != Profile.STATUS_ACTIVE:
-            from rest_framework.authtoken.models import Token
+            from .api_tokens import revoke_all_tokens
 
-            Token.objects.filter(user=target_user).delete()
+            revoke_all_tokens(target_user, actor, f"account set to {new_status} by {actor.username}")
 
         audit(
             AuditLog.EVENT_USER_MANAGED,

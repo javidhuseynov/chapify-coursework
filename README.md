@@ -164,7 +164,7 @@ Administrator pages (side menu):
 | Audit log | Every recorded event, filterable by type |
 | Reports | Totals by status, printed pages and confirmed revenue |
 
-A **blocked** account cannot log in, its open sessions end and its API tokens are deleted.
+A **blocked** account cannot log in, its open sessions end and its API tokens are revoked.
 A **failed** print job keeps its file so it can be retried; after the retention period the file
 is removed by `cleanup_documents`.
 
@@ -173,11 +173,22 @@ logouts, registrations, account and printer changes, payments and every print jo
 
 ## 6. REST API
 
-Authentication: session, or token (`Authorization: Token <token>`).
+Interactive documentation (Swagger UI): **http://127.0.0.1:8000/api/docs/** (log in first; also linked
+as *API documentation* in the administrator menu). The machine-readable OpenAPI 3 description is at
+`/api/schema/` (`?format=json` for JSON). CI checks that the schema is valid and that every endpoint is
+described.
+
+Authentication: session (browser), or an API token: `Authorization: Token <token>` (`Bearer` also
+accepted). Tokens **expire** after `CHAPIFY_API_TOKEN_TTL_HOURS` (default 7 days), are stored only as a
+SHA-256 hash, and are revoked when the user logs the app out, changes their password, or is blocked.
+Users see and revoke their signed-in apps on the **Account** page.
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| POST | `/api/auth/token/` | Get a token (`username`, `password`) |
+| POST | `/api/auth/token/` | Log in: `username`, `password`, optional `name` (e.g. `Chapify mobile`). Returns the token once, with `expires_at` |
+| POST | `/api/auth/token/revoke/` | Log out: revoke the token used for this request |
+| GET | `/api/auth/tokens/` | List own active tokens |
+| DELETE | `/api/auth/tokens/<id>/` | Revoke one own token |
 | GET | `/api/my/requests/` | Own print requests (`?status=`, `?q=`) |
 | GET | `/api/my/requests/<id>/` | One own request |
 | GET | `/api/my/payments/` | Own payment attempts |

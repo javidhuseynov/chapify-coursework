@@ -33,6 +33,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip freeze
 
       - name: Django system check
         run: python manage.py check
@@ -42,6 +43,9 @@ jobs:
 
       - name: Run tests
         run: python manage.py test --verbosity 2
+
+      - name: OpenAPI schema is valid and complete
+        run: python manage.py spectacular --validate --fail-on-warn --file openapi-schema.yaml
 
       - name: Scan dependencies for known vulnerabilities (pip-audit)
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
