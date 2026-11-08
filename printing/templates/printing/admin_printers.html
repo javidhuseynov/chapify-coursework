@@ -20,7 +20,7 @@
             <td>
               {% if printer.has_station %}
                 {% if printer.station_connected %}
-                  <strong>Connected</strong>, last seen {{ printer.station_last_seen_at|timesince }} ago
+                  <strong>Connected</strong>, last seen {% if printer.seen_recently %}just now{% else %}{{ printer.station_last_seen_at|timesince }} ago{% endif %}
                   {% if printer.paper_sheets is not None %}<br><span class="small subtle">Paper {{ printer.paper_sheets }} sheets · Toner {{ printer.toner_percent }}%</span>{% endif %}
                 {% elif printer.station_last_seen_at %}
                   Not responding since {{ printer.station_last_seen_at|date:"j M, H:i" }}
@@ -72,7 +72,7 @@
       <div class="field"><label for="location">Location</label><input type="text" id="location" name="location" maxlength="150" required placeholder="For example: Library, ground floor"></div>
       <button type="submit" class="btn btn-primary">Add printer</button>
     </form>
-    <h3 class="section">Print stations</h3>
+    <h3 class="sheet-subhead">Print stations</h3>
     <p class="small muted">A print station is the separate program that runs next to a printer. It asks Chapify for jobs, downloads each document, prints it and reports the result. Use <strong>Connect a print station</strong> to get its key.</p>
   </section>
 </div>

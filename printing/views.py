@@ -877,6 +877,10 @@ def admin_printers(request):
     now = timezone.now()
     for printer in printers:
         printer.station_connected = stations.is_connected(printer, now)
+        printer.seen_recently = (
+            printer.station_last_seen_at is not None
+            and (now - printer.station_last_seen_at).total_seconds() < 60
+        )
 
     return render(
         request,

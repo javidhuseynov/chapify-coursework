@@ -753,3 +753,4 @@ table.kv td { padding: var(--space-2) 0; overflow-wrap: anywhere; }
 .section-tight { margin-top: var(--space-2); }
 code.secret { display: inline-block; padding: var(--space-2) var(--space-3); background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; font-size: 1rem; user-select: all; }
 pre.command { padding: var(--space-3); background: var(--ink); color: #fff; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.9rem; }
+.sheet-subhead { margin-top: var(--space-6); }

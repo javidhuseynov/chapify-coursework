@@ -224,12 +224,15 @@ class StationWindow:
 
     def _refresh_device(self):
         status, message = self.device.status()
-        if self.station.current_job is not None and status == "AVAILABLE":
+        job = self.station.current_job
+        if job is not None and status == "AVAILABLE":
             text, colour = "Printing", BLUE
+            detail = f"Job #{job['id']} for {job['owner']}"
         else:
             text, colour = STATUS_TEXT.get(status, (status, MUTED))
+            detail = message if status != "AVAILABLE" else "Waiting for jobs from Chapify"
         self.state_label.configure(text=text, fg=colour)
-        self.state_detail.configure(text=message if status != "AVAILABLE" else "Waiting for jobs from Chapify")
+        self.state_detail.configure(text=detail)
 
         sheets = self.device.paper_sheets
         self.paper_bar.configure(value=sheets)
