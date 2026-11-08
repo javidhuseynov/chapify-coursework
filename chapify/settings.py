@@ -54,7 +54,6 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'drf_spectacular_sidecar',  # Swagger UI files served by Chapify itself (no CDN)
     'printing',
-    'mockgateway',
 ]
 
 MIDDLEWARE = [
@@ -225,16 +224,35 @@ MEDIA_ROOT = BASE_DIR / "private_media"
 DOCUMENT_RETENTION_HOURS = env_int("CHAPIFY_DOCUMENT_RETENTION_HOURS", 24)
 
 
-# Payment gateway (simulated external gateway, see the mockgateway app).
-# The shared secret is used to sign checkout sessions and to verify payment
-# notifications (HMAC-SHA256). Set your own value in .env.
-PAYMENT_GATEWAY_SECRET = env_str(
-    "CHAPIFY_PAYMENT_GATEWAY_SECRET",
-    "local-development-gateway-secret-change-me",
-)
+# Payment gateway (printing/payment_gateways.py).
+#   "chapify_pay": the separate test gateway in gateway_service/ (default; run it on port 8001)
+#   "stripe":      Stripe in test mode (live keys are refused)
+PAYMENT_GATEWAY = env_str("CHAPIFY_PAYMENT_GATEWAY", "chapify_pay")
 PAYMENT_CURRENCY = "EUR"
-PAYMENT_SESSION_MAX_AGE_SECONDS = 30 * 60
-PAYMENT_NOTIFICATION_MAX_AGE_SECONDS = 15 * 60
+# Webhook signatures older or newer than this are refused (replay protection).
+PAYMENT_WEBHOOK_TOLERANCE_SECONDS = 5 * 60
+
+# Chapify Pay. The API key authenticates Chapify to the gateway; the webhook
+# secret lets Chapify verify the gateway's notifications. The same values are
+# configured in the gateway (gateway_service reads the same .env file).
+CHAPIFY_PAY_URL = env_str("CHAPIFY_PAY_URL", "http://127.0.0.1:8001")
+CHAPIFY_PAY_API_KEY = env_str("CHAPIFY_PAY_API_KEY", "sk_test_local-development-key-change-me")
+CHAPIFY_PAY_WEBHOOK_SECRET = env_str("CHAPIFY_PAY_WEBHOOK_SECRET", "whsec_local-development-secret-change-me")
+
+# Stripe (test mode only).
+STRIPE_SECRET_KEY = env_str("CHAPIFY_STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = env_str("CHAPIFY_STRIPE_WEBHOOK_SECRET", "")
+
+if PAYMENT_GATEWAY == "stripe":
+    if not STRIPE_SECRET_KEY.startswith(("sk_test_", "rk_test_")) or not STRIPE_WEBHOOK_SECRET:
+        raise ImproperlyConfigured(
+            "CHAPIFY_PAYMENT_GATEWAY=stripe needs a Stripe TEST key (sk_test_...) in "
+            "CHAPIFY_STRIPE_SECRET_KEY and the webhook signing secret in CHAPIFY_STRIPE_WEBHOOK_SECRET. "
+            "Live keys are refused: Chapify never moves real money."
+        )
+    PAYMENT_CHECKOUT_ORIGIN = "https://checkout.stripe.com"
+else:
+    PAYMENT_CHECKOUT_ORIGIN = CHAPIFY_PAY_URL.rstrip("/")
 
 
 # Login protection (printing/login_protection.py): lock a username + IP address
@@ -251,9 +269,13 @@ X_FRAME_OPTIONS = "DENY"
 # Production safety. With DEBUG off, refuse to start with the public
 # development secrets from this file.
 if not DEBUG:
-    if SECRET_KEY.startswith("django-insecure") or "change-me" in PAYMENT_GATEWAY_SECRET:
+    if SECRET_KEY.startswith("django-insecure") or (
+        PAYMENT_GATEWAY == "chapify_pay"
+        and ("change-me" in CHAPIFY_PAY_API_KEY or "change-me" in CHAPIFY_PAY_WEBHOOK_SECRET)
+    ):
         raise ImproperlyConfigured(
-            "Set CHAPIFY_SECRET_KEY and CHAPIFY_PAYMENT_GATEWAY_SECRET in .env before running with DEBUG off."
+            "Set CHAPIFY_SECRET_KEY, CHAPIFY_PAY_API_KEY and CHAPIFY_PAY_WEBHOOK_SECRET in .env "
+            "before running with DEBUG off."
         )
 
 # HTTPS-only settings for a deployment behind TLS (set CHAPIFY_HTTPS=True).
@@ -292,6 +314,7 @@ SECURE_CSP = {
     "connect-src": [CSP.SELF],
     "object-src": [CSP.NONE],
     "base-uri": [CSP.NONE],
-    "form-action": [CSP.SELF],
+    # The "Pay" form redirects the browser to the gateway's checkout page.
+    "form-action": [CSP.SELF, PAYMENT_CHECKOUT_ORIGIN],
     "frame-ancestors": [CSP.NONE],
 }

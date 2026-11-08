@@ -1,0 +1,15 @@
+{% extends "checkout/base.html" %}
+
+{% block title %}Payment declined{% endblock %}
+
+{% block content %}
+<p class="merchant">Payment to {{ session.description|default:"the merchant" }}</p>
+<p class="amount">{{ session.amount }} <span>{{ session.currency }}</span></p>
+<div class="result result-bad">
+  <h1>Payment declined</h1>
+  <p>{{ message }} You have not been charged.</p>
+  <p class="small">{{ payment.card_brand|title }} ending in {{ payment.card_last4 }}</p>
+</div>
+<a class="pay-button" href="{{ return_url }}">Return to the merchant</a>
+<p class="ref">Payment {{ payment.id }}</p>
+{% endblock %}

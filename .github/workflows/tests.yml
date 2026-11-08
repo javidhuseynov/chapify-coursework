@@ -18,7 +18,8 @@ jobs:
     env:
       # Throwaway values for the test run only (real secrets live in .env, never in Git).
       CHAPIFY_SECRET_KEY: ci-only-not-a-real-secret
-      CHAPIFY_PAYMENT_GATEWAY_SECRET: ci-only-not-a-real-secret
+      CHAPIFY_PAY_API_KEY: sk_test_ci-only-not-a-real-key
+      CHAPIFY_PAY_WEBHOOK_SECRET: whsec_ci-only-not-a-real-secret
       CHAPIFY_DEBUG: "False"
 
     steps:
@@ -46,6 +47,13 @@ jobs:
 
       - name: OpenAPI schema is valid and complete
         run: python manage.py spectacular --validate --fail-on-warn --file openapi-schema.yaml
+
+      - name: Payment gateway service (gateway_service/) checks and tests
+        working-directory: gateway_service
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          python manage.py test --verbosity 2
 
       - name: Scan dependencies for known vulnerabilities (pip-audit)
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'

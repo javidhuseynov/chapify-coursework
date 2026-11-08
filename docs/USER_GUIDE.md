@@ -59,13 +59,19 @@ The full price list is on **Prices and help**.
 ## 4. Pay
 
 1. On the payment page check the job slip and press **Pay … EUR**.
-2. You are taken to the payment gateway page (**Chapify Pay**). In this prototype the gateway is
-   in *test mode*: there is no card form; press **Approve payment** (or **Decline payment** to
-   try the declined case).
-3. You return to Chapify automatically.
+2. You are taken to the payment provider's page (**Chapify Pay**, a separate site). It runs in
+   *test mode*: enter a **test card**, for example `4242 4242 4242 4242`, any name, any future
+   expiry date (MM/YY) and any 3-digit security code, and press **Pay**. The list of test cards is
+   under *Test card numbers* on that page; `4000 0000 0000 9995` shows a declined payment.
+3. After a successful payment you return to Chapify automatically. After a declined payment the
+   provider shows the reason; press **Return to the merchant**. **Cancel and return to Chapify**
+   leaves without paying.
 
-- **Approved**: your request becomes *Payment confirmed* and a print job is placed in the queue.
-- **Declined**: your request becomes *Payment rejected*. Press **Try payment again** or **Cancel request**.
+- **Paid**: your request becomes *Payment confirmed* and a print job is placed in the queue.
+- **Declined**: your request becomes *Payment rejected*. You have not been charged. Press
+  **Try payment again** or **Cancel request**.
+- If Chapify says the payment service *has not confirmed the payment yet*, the request page
+  updates by itself as soon as the provider reports the result.
 
 Chapify never sees or stores card details. Until a payment is confirmed you can still
 **Change settings** (the price is recalculated) or **Cancel request**.
@@ -82,7 +88,7 @@ progress timeline with times, the print job and the payment. Request statuses:
 | Payment rejected | The gateway declined the payment; you may try again |
 | Payment confirmed | Paid; the print job is queued or printing |
 | Completed | Printed; collect your printout |
-| Failed | The printer had a problem; staff can print it again |
+| Failed | The printer had a problem (for example a paper jam); staff can print it again |
 | Cancelled | Cancelled by you, or not paid within 24 hours |
 
 The print job shows *Queued*, *In progress*, *Completed* or *Failed* (with the reason).

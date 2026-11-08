@@ -10,7 +10,6 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from pypdf import PdfWriter
 
-from mockgateway import signing
 from printing import services
 from printing.forms import registration_form_token
 from printing.models import PaymentTransaction
@@ -47,17 +46,17 @@ def default_options(**overrides):
     return services.PrintOptions(**values)
 
 
-def sign_notification(payment, status="APPROVED", **overrides):
+def gateway_result(payment, status="APPROVED", **overrides):
+    """A verified gateway result, as services.apply_payment_notification receives it."""
     data = {
         "reference": str(payment.reference),
         "amount": str(payment.amount),
         "currency": payment.currency,
         "status": status,
-        "gateway_transaction_id": overrides.pop("gateway_transaction_id", "MOCK-TEST0001"),
+        "gateway_transaction_id": overrides.pop("gateway_transaction_id", "pay_test_0001"),
     }
     data.update(overrides)
-    issued_at = data.pop("issued_at", None)
-    return signing.sign(data, settings.PAYMENT_GATEWAY_SECRET, issued_at=issued_at)
+    return data
 
 
 def registration_data(username="newbie", seconds_ago=30, **overrides):
@@ -119,9 +118,7 @@ class ChapifyTestCase(TestCase):
     def make_paid_request(self, user, **option_overrides):
         print_request = self.make_request(user, **option_overrides)
         payment = services.initiate_payment(print_request, user)
-        services.apply_payment_notification(
-            signing.unsign(sign_notification(payment), settings.PAYMENT_GATEWAY_SECRET)
-        )
+        services.apply_payment_notification(gateway_result(payment))
         print_request.refresh_from_db()
         return print_request
 

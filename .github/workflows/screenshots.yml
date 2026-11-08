@@ -28,7 +28,16 @@ jobs:
         run: |
           python manage.py migrate
           python manage.py seed_demo --password Demo-pass-2026
-      - name: Start server
+      - name: Start the payment gateway (separate application, port 8001)
+        working-directory: gateway_service
+        env:
+          DJANGO_SUPERUSER_PASSWORD: Demo-pass-2026
+        run: |
+          python manage.py migrate > /dev/null
+          python manage.py createsuperuser --noinput --username gateway_admin --email gateway@example.com
+          python manage.py runserver 127.0.0.1:8001 > ../gateway.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8001/ > /dev/null && break; sleep 1; done
+      - name: Start Chapify (port 8000)
         run: |
           python manage.py runserver 127.0.0.1:8000 > server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/login/ > /dev/null && break; sleep 1; done
@@ -50,9 +59,12 @@ jobs:
       - name: Print station log
         if: always()
         run: cat station.log || true
-      - name: Server log
+      - name: Server logs
         if: always()
-        run: tail -n 60 server.log
+        run: |
+          tail -n 60 server.log
+          echo "--- gateway ---"
+          tail -n 40 gateway.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -18,7 +18,6 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management.base import BaseCommand, CommandError
 from pypdf import PdfWriter
 
-from mockgateway import signing
 from printing import services
 from printing.models import Printer, Profile
 from printing.validators import inspect_uploaded_document
@@ -86,10 +85,10 @@ class Command(BaseCommand):
                 "amount": str(payment.amount),
                 "currency": payment.currency,
                 "status": status,
-                "gateway_transaction_id": f"MOCK-DEMO{payment.pk:06d}",
+                "gateway_transaction_id": f"pay_demo_{payment.pk:06d}",
             }
-            token = signing.sign(data, settings.PAYMENT_GATEWAY_SECRET)
-            services.apply_payment_notification(signing.unsign(token, settings.PAYMENT_GATEWAY_SECRET))
+            # Demo history only: applied directly, as if the gateway had reported it.
+            services.apply_payment_notification(data)
 
         # 1. Completed: paid and printed.
         completed = new_request(student, "lecture_notes.pdf", 12, copies=2)
