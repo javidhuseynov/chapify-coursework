@@ -42,5 +42,5 @@ class ExpiringTokenScheme(OpenApiAuthenticationExtension):
             "type": "apiKey",
             "in": "header",
             "name": "Authorization",
-            "description": "Value: 'Token <token>' (token from POST /api/auth/token/).",
+            "description": "Value: `Token <token>` (token from `POST /api/auth/token/`).",
         }

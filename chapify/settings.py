@@ -188,8 +188,8 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Chapify API",
     "DESCRIPTION": (
         "REST API of Chapify, a self-service printing system with micro-payments. "
-        "Authenticate with POST /api/auth/token/ and send the token as "
-        "'Authorization: Token <token>'. Payments are completed only by the payment "
+        "Authenticate with `POST /api/auth/token/` and send the token as "
+        "`Authorization: Token <token>`. Payments are completed only by the payment "
         "gateway; no endpoint lets a client confirm its own payment."
     ),
     "VERSION": "1.0.0",
