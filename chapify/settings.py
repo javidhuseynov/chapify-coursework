@@ -170,6 +170,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/minute",
         "user": "300/minute",
+        "print_station": "240/minute",
     },
 }
 
@@ -181,6 +182,11 @@ if not DEBUG:
 # (when exceeded, the oldest token is revoked).
 API_TOKEN_TTL_HOURS = env_int("CHAPIFY_API_TOKEN_TTL_HOURS", 7 * 24)
 API_TOKENS_PER_USER = 10
+
+# Print stations (separate application in print_station/): a printer whose
+# station has not sent a heartbeat for this long is marked OFFLINE and the job
+# it was printing fails (so that it can be printed again).
+PRINT_STATION_TIMEOUT_SECONDS = env_int("CHAPIFY_PRINT_STATION_TIMEOUT_SECONDS", 60)
 
 # OpenAPI description of the REST API (drf-spectacular).
 # Schema: /api/schema/   Interactive documentation: /api/docs/  (login required)
@@ -205,6 +211,7 @@ SPECTACULAR_SETTINGS = {
         {"name": "Authentication", "description": "API tokens"},
         {"name": "Print requests", "description": "Upload, price, pay and track print requests"},
         {"name": "Administration", "description": "Administrator-only views (ADMIN role)"},
+        {"name": "Print stations", "description": "Used by the print station application (printer key)"},
     ],
 }
 

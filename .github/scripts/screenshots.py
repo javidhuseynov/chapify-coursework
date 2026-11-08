@@ -99,10 +99,43 @@ def run(browser, prefix, viewport):
     return [e for e in errors if "Content Security Policy" in e]
 
 
+def station_setup(browser):
+    """Connect Library Printer 1 to a print station through the admin UI; save the key."""
+    context = browser.new_context(viewport={"width": 1440, "height": 900})
+    page = context.new_page()
+    login(page, "demo_admin")
+    page.goto(BASE + "/admin-printers/")
+    row = page.locator("tr", has_text="Library Printer 1")
+    row.get_by_role("button", name="Connect a print station").click()
+    page.wait_for_load_state("networkidle")
+    shoot(page, "desktop-30-station-key")
+    key = page.locator("code.secret").inner_text().strip()
+    Path("station.key").write_text(key)
+    context.close()
+
+
+def station_result(browser):
+    context = browser.new_context(viewport={"width": 1440, "height": 900})
+    page = context.new_page()
+    login(page, "demo_admin")
+    shoot(page, "desktop-33-printers-with-station", "/admin-printers/")
+    shoot(page, "desktop-34-overview-with-station", "/admin-dashboard/")
+    shoot(page, "desktop-35-audit-with-station", "/admin-audit/?status=PRINT_STATION")
+    context.close()
+
+
+MODE = sys.argv[2] if len(sys.argv) > 2 else "pages"
+
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    violations = run(browser, "desktop-", {"width": 1440, "height": 900})
-    violations += run(browser, "mobile-", {"width": 390, "height": 844})
+    violations = []
+    if MODE == "pages":
+        violations = run(browser, "desktop-", {"width": 1440, "height": 900})
+        violations += run(browser, "mobile-", {"width": 390, "height": 844})
+    elif MODE == "station-setup":
+        station_setup(browser)
+    elif MODE == "station-result":
+        station_result(browser)
     browser.close()
 
 if violations:

@@ -1,0 +1,23 @@
+{% extends "printing/base.html" %}
+
+{% block title %}Print station key{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Print station key</h1>
+    <p>{{ printer.printer_name }}, {{ printer.location }}</p>
+  </div>
+</div>
+
+<section class="sheet">
+  <div class="notice notice-warning">Copy the key now. It is shown only once; Chapify stores only a fingerprint of it. Anyone with this key can download the documents sent to this printer, so treat it like a password.</div>
+  <h2 class="section">Key</h2>
+  <p><code class="secret">{{ station_key }}</code></p>
+  <h2 class="section">Start the print station</h2>
+  <p>On the computer next to the printer, in the Chapify folder (Command Prompt):</p>
+  <pre class="command">python -m print_station --server {{ server_url }} --key {{ station_key }}</pre>
+  <p class="small muted">The printer stays offline until the station connects. Any previous key of this printer has stopped working.</p>
+  <p class="section"><a class="btn btn-primary" href="{% url 'admin_printers' %}">Back to printers</a></p>
+</section>
+{% endblock %}

@@ -234,6 +234,21 @@ class Printer(models.Model):
     location = models.CharField(max_length=150)
     printer_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_AVAILABLE)
 
+    # Print station (separate application, see print_station/). A printer with a
+    # station key receives jobs only through the printer API; without one it is
+    # driven by the built-in simulator. Only the SHA-256 hash of the key is stored.
+    station_key_hash = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    station_key_prefix = models.CharField(max_length=12, blank=True, default="")
+    station_last_seen_at = models.DateTimeField(null=True, blank=True)
+    station_info = models.CharField(max_length=150, blank=True, default="")
+    # Consumables as last reported by the print station.
+    paper_sheets = models.PositiveIntegerField(null=True, blank=True)
+    toner_percent = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    @property
+    def has_station(self):
+        return bool(self.station_key_hash)
+
     def __str__(self):
         return f"{self.printer_name} ({self.location})"
 
@@ -287,6 +302,7 @@ class AuditLog(models.Model):
     EVENT_ADMIN_ACTION = "ADMIN_ACTION"
     EVENT_API_TOKEN_CREATED = "API_TOKEN_CREATED"
     EVENT_API_TOKEN_REVOKED = "API_TOKEN_REVOKED"
+    EVENT_PRINT_STATION = "PRINT_STATION"
 
     EVENT_CHOICES = [
         (EVENT_LOGIN_SUCCESS, "Login success"),
@@ -310,6 +326,7 @@ class AuditLog(models.Model):
         (EVENT_ADMIN_ACTION, "Admin action"),
         (EVENT_API_TOKEN_CREATED, "API token created"),
         (EVENT_API_TOKEN_REVOKED, "API token revoked"),
+        (EVENT_PRINT_STATION, "Print station event"),
     ]
 
     user = models.ForeignKey(

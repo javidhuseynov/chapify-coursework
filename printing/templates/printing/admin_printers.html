@@ -4,21 +4,37 @@
 {% block title %}Printers{% endblock %}
 
 {% block content %}
-<div class="page-head"><div><h1>Printers</h1><p>Only available printers receive jobs. Busy is set automatically while a printer is printing.</p></div></div>
+<div class="page-head"><div><h1>Printers</h1><p>Only available printers receive jobs. A printer connected to a print station reports its own status; the others are driven by the built-in simulator.</p></div></div>
 
 <div class="grid grid-main-side">
   <section class="sheet sheet-flush">
     {% if printers %}
     <div class="table-wrap">
       <table class="data">
-        <thead><tr><th>Printer</th><th>Status</th><th class="num">Jobs</th><th>Set status</th></tr></thead>
+        <thead><tr><th>Printer</th><th>Status</th><th>Print station</th><th class="num">Jobs</th><th>Actions</th></tr></thead>
         <tbody>
         {% for printer in printers %}
           <tr>
             <td><strong>{{ printer.printer_name }}</strong><br><span class="subtle">{{ printer.location }}</span></td>
             <td><span class="status status-{{ printer.printer_status|status_tone }}">{{ printer.get_printer_status_display }}</span></td>
+            <td>
+              {% if printer.has_station %}
+                {% if printer.station_connected %}
+                  <strong>Connected</strong>, last seen {{ printer.station_last_seen_at|timesince }} ago
+                  {% if printer.paper_sheets is not None %}<br><span class="small subtle">Paper {{ printer.paper_sheets }} sheets · Toner {{ printer.toner_percent }}%</span>{% endif %}
+                {% elif printer.station_last_seen_at %}
+                  Not responding since {{ printer.station_last_seen_at|date:"j M, H:i" }}
+                {% else %}
+                  Waiting for the station to connect
+                {% endif %}
+                <br><span class="small subtle">Key {{ printer.station_key_prefix }}…{% if printer.station_info %} · {{ printer.station_info }}{% endif %}</span>
+              {% else %}
+                <span class="muted">Built-in simulator</span>
+              {% endif %}
+            </td>
             <td class="num">{{ printer.job_count }}</td>
             <td>
+              {% if not printer.has_station %}
               <form method="post" action="{% url 'admin_printer_status' printer.pk %}" class="btn-row">
                 {% csrf_token %}
                 <label class="visually-hidden" for="status-{{ printer.pk }}">Status of {{ printer.printer_name }}</label>
@@ -26,6 +42,16 @@
                   {% for value, label in manual_statuses %}<option value="{{ value }}" {% if printer.printer_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
                 </select>
                 <button type="submit" class="btn btn-sm">Save</button>
+              </form>
+              {% endif %}
+              <form method="post" action="{% url 'admin_printer_station' printer.pk %}" class="btn-row section-tight">
+                {% csrf_token %}
+                {% if printer.has_station %}
+                  <button type="submit" class="btn btn-sm">New station key</button>
+                  <button type="submit" name="action" value="disconnect" class="btn btn-sm btn-quiet">Disconnect</button>
+                {% else %}
+                  <button type="submit" class="btn btn-sm">Connect a print station</button>
+                {% endif %}
               </form>
             </td>
           </tr>
@@ -46,6 +72,8 @@
       <div class="field"><label for="location">Location</label><input type="text" id="location" name="location" maxlength="150" required placeholder="For example: Library, ground floor"></div>
       <button type="submit" class="btn btn-primary">Add printer</button>
     </form>
+    <h3 class="section">Print stations</h3>
+    <p class="small muted">A print station is the separate program that runs next to a printer. It asks Chapify for jobs, downloads each document, prints it and reports the result. Use <strong>Connect a print station</strong> to get its key.</p>
   </section>
 </div>
 {% endblock %}

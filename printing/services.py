@@ -510,33 +510,58 @@ def _queue_print_job(print_request):
     return job
 
 
-def start_next_print_job():
-    """Take the oldest queued job and mark it IN_PROGRESS on an available printer.
+def _claimable_jobs(printer=None):
+    """Queued jobs a printer may take, oldest first.
 
+    A printer takes jobs that are unassigned, assigned to itself, or assigned
+    to a printer that is not available. The built-in simulator (printer=None)
+    may also take jobs assigned to any available printer without a print
+    station, but never a job waiting for an available print station.
+    """
+    queued = PrintJob.objects.filter(job_status=PrintJob.STATUS_QUEUED)
+    not_available = Q(printer__isnull=False) & ~Q(printer__printer_status=Printer.STATUS_AVAILABLE)
+
+    if printer is not None:
+        scope = Q(printer__isnull=True) | Q(printer=printer) | not_available
+    else:
+        scope = (
+            Q(printer__isnull=True)
+            | Q(printer__station_key_hash="", printer__printer_status=Printer.STATUS_AVAILABLE)
+            | not_available
+        )
+
+    return queued.filter(scope).select_related("printer", "print_request").order_by("created_at", "id")
+
+
+def start_next_print_job(printer=None):
+    """Take the oldest claimable job and mark it IN_PROGRESS.
+
+    ``printer`` is the print station asking for work; when None, the built-in
+    simulator picks an available printer that has no print station.
     Returns the job, or None when nothing can be started (empty queue or no
     available printer).
     """
     with transaction.atomic():
-        job = (
-            PrintJob.objects
-            .filter(job_status=PrintJob.STATUS_QUEUED)
-            .select_related("printer", "print_request")
-            .order_by("created_at", "id")
-            .first()
-        )
+        if printer is not None:
+            printer = Printer.objects.get(pk=printer.pk)
+            if printer.printer_status != Printer.STATUS_AVAILABLE:
+                return None
+
+        job = _claimable_jobs(printer).first()
 
         if job is None:
             return None
 
-        printer = job.printer
+        if printer is None:
+            printer = job.printer
 
-        if printer is None or printer.printer_status != Printer.STATUS_AVAILABLE:
-            printer = (
-                Printer.objects
-                .filter(printer_status=Printer.STATUS_AVAILABLE)
-                .order_by("id")
-                .first()
-            )
+            if printer is None or printer.has_station or printer.printer_status != Printer.STATUS_AVAILABLE:
+                printer = (
+                    Printer.objects
+                    .filter(printer_status=Printer.STATUS_AVAILABLE, station_key_hash="")
+                    .order_by("id")
+                    .first()
+                )
 
         if printer is None:
             return None
@@ -715,6 +740,12 @@ MANUAL_PRINTER_STATUSES = (Printer.STATUS_AVAILABLE, Printer.STATUS_OFFLINE, Pri
 def set_printer_status(printer, new_status, actor):
     if new_status not in MANUAL_PRINTER_STATUSES:
         raise WorkflowError("A printer can only be set to Available, Offline or Error.")
+
+    if printer.has_station:
+        raise WorkflowError(
+            f"The status of {printer.printer_name} is reported by its print station; "
+            "change it in the print station application."
+        )
 
     with transaction.atomic():
         old_status = printer.printer_status
