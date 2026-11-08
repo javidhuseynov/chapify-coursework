@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from printing import services
+from printing import api_tokens, services
 
 
 class Command(BaseCommand):
@@ -27,3 +27,7 @@ class Command(BaseCommand):
             f"abandoned uploads deleted: {summary['orphan_files']}, "
             f"leftover files of finished requests deleted: {summary['terminal_files']}."
         )
+
+        if not options["dry_run"]:
+            purged = api_tokens.purge_old_tokens()
+            self.stdout.write(f"Old expired or revoked API tokens deleted: {purged}.")

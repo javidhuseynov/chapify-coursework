@@ -67,5 +67,5 @@ class LoginLockoutTests(ChapifyTestCase):
         response = self.client.post(
             "/api/auth/token/", {"username": "alice", "password": PASSWORD}, REMOTE_ADDR="10.0.0.10"
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 201)
         self.assertIn("token", response.json())

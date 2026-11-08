@@ -102,7 +102,7 @@ class PrintJobSerializer(serializers.ModelSerializer):
 class AuditLogSerializer(serializers.ModelSerializer):
     username = serializers.SerializerMethodField()
 
-    def get_username(self, obj):
+    def get_username(self, obj) -> str | None:
         return obj.user.username if obj.user_id else None
 
     class Meta:
@@ -132,3 +132,33 @@ class CreatePrintRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError(str(error))
 
         return uploaded_file
+
+class CreatePrintRequestResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    print_request = PrintRequestSerializer()
+
+
+class PaymentStartSerializer(serializers.Serializer):
+    payment_reference = serializers.UUIDField(help_text="Chapify's reference of this payment attempt.")
+    amount = serializers.DecimalField(max_digits=8, decimal_places=2)
+    currency = serializers.CharField()
+    payment_status = serializers.CharField()
+    checkout_url = serializers.URLField(help_text="Open this page so the payer can pay at the payment gateway.")
+
+
+class AdminSummarySerializer(serializers.Serializer):
+    total_requests = serializers.IntegerField()
+    confirmed_payments = serializers.IntegerField()
+    rejected_payments = serializers.IntegerField()
+    queued_jobs = serializers.IntegerField()
+    completed_jobs = serializers.IntegerField()
+    failed_jobs = serializers.IntegerField()
+
+
+class ErrorSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+
+
+class ConflictSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+    current_status = serializers.CharField(required=False)

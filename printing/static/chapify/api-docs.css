@@ -1,0 +1,13 @@
+/* Page chrome around Swagger UI on /api/docs/ (kept out of the HTML for the CSP). */
+html { box-sizing: border-box; overflow-y: scroll; }
+*, *::after, *::before { box-sizing: inherit; }
+body { background: #f3f5f8; margin: 0; }
+.docs-bar {
+  display: flex; gap: 1.5rem; align-items: baseline;
+  padding: 0.9rem 1.5rem; background: #fff; border-bottom: 1px solid #d8dde5;
+  font-family: "Segoe UI", system-ui, sans-serif; color: #4e5869;
+}
+.docs-bar a { color: #0b63b6; }
+.docs-bar a:first-child { font-weight: 700; color: #18202e; text-decoration: none; }
+.docs-bar a:last-child { margin-left: auto; }
+.swagger-ui .topbar { display: none; }

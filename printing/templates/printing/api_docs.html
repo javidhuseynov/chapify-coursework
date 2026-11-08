@@ -1,0 +1,22 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>API documentation – Chapify</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="{% static 'chapify/favicon.svg' %}" type="image/svg+xml">
+    <link rel="stylesheet" href="{{ swagger_ui_css }}">
+    <link rel="stylesheet" href="{% static 'chapify/api-docs.css' %}">
+  </head>
+  <body>
+    <header class="docs-bar">
+      <a href="{% url 'home' %}">Chapify</a>
+      <span>API documentation</span>
+      <a href="{% url 'api_schema' %}?format=json">OpenAPI schema (JSON)</a>
+    </header>
+    <div id="swagger-ui"></div>
+    <script src="{{ swagger_ui_bundle }}"></script>
+    <script src="{{ swagger_ui_standalone }}"></script>
+    <script src="{{ script_url }}"></script>
+  </body>
+</html>

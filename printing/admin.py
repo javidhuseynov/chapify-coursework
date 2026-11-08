@@ -9,6 +9,7 @@ from .models import (
     Printer,
     PrintJob,
     AuditLog,
+    ApiToken,
 )
 
 
@@ -66,3 +67,14 @@ class AuditLogAdmin(admin.ModelAdmin):
     list_display = ("event_type", "user", "print_request", "event_timestamp")
     list_filter = ("event_type", "event_timestamp")
     search_fields = ("description", "user__username")
+
+@admin.register(ApiToken)
+class ApiTokenAdmin(admin.ModelAdmin):
+    list_display = ("name", "user", "key_prefix", "created_at", "expires_at", "last_used_at", "revoked_at")
+    list_filter = ("revoked_at",)
+    search_fields = ("user__username", "name", "key_prefix")
+    # Tokens are created only through the API; only the hash is stored.
+    readonly_fields = ("user", "name", "key_prefix", "key_hash", "created_at", "expires_at", "last_used_at")
+
+    def has_add_permission(self, request):
+        return False

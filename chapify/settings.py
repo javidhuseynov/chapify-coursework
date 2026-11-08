@@ -51,7 +51,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'rest_framework',
-    'rest_framework.authtoken',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',  # Swagger UI files served by Chapify itself (no CDN)
     'printing',
     'mockgateway',
 ]
@@ -155,9 +156,12 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        # Expiring, revocable, hashed tokens (printing/api_tokens.py). Listed first
+        # so that a missing or invalid token gets "401 Unauthorized".
+        "printing.api_tokens.ExpiringTokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.TokenAuthentication",
     ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     # General API rate limits (per IP for anonymous clients, per user otherwise).
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
@@ -172,6 +176,37 @@ REST_FRAMEWORK = {
 if not DEBUG:
     # In production the API answers in JSON only (no browsable HTML API pages).
     REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = ["rest_framework.renderers.JSONRenderer"]
+
+# API tokens: lifetime and the maximum number of active tokens per user
+# (when exceeded, the oldest token is revoked).
+API_TOKEN_TTL_HOURS = env_int("CHAPIFY_API_TOKEN_TTL_HOURS", 7 * 24)
+API_TOKENS_PER_USER = 10
+
+# OpenAPI description of the REST API (drf-spectacular).
+# Schema: /api/schema/   Interactive documentation: /api/docs/  (login required)
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Chapify API",
+    "DESCRIPTION": (
+        "REST API of Chapify, a self-service printing system with micro-payments. "
+        "Authenticate with POST /api/auth/token/ and send the token as "
+        "'Authorization: Token <token>'. Payments are completed only by the payment "
+        "gateway; no endpoint lets a client confirm its own payment."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAuthenticated"],
+    "SCHEMA_PATH_PREFIX": r"/api/",
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "REDOC_DIST": "SIDECAR",
+    "SWAGGER_UI_SETTINGS": {"persistAuthorization": False, "displayRequestDuration": True},
+    "TAGS": [
+        {"name": "Authentication", "description": "API tokens"},
+        {"name": "Print requests", "description": "Upload, price, pay and track print requests"},
+        {"name": "Administration", "description": "Administrator-only views (ADMIN role)"},
+    ],
+}
 
 
 # Uploaded documents. Stored outside any web-served folder; Chapify never

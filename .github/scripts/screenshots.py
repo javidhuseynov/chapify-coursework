@@ -89,14 +89,21 @@ def run(browser, prefix, viewport):
     shoot(page, f"{prefix}25-admin-audit", "/admin-audit/")
     shoot(page, f"{prefix}26-admin-reports", "/admin-report/")
     shoot(page, f"{prefix}27-django-admin", "/admin/printing/printrequest/")
+    page.goto(BASE + "/api/docs/")
+    page.wait_for_selector(".swagger-ui .info", timeout=15000)
+    shoot(page, f"{prefix}28-api-docs")
 
     if errors:
         print("CONSOLE ERRORS:", *errors, sep="\n  ")
     context.close()
+    return [e for e in errors if "Content Security Policy" in e]
 
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    run(browser, "desktop-", {"width": 1440, "height": 900})
-    run(browser, "mobile-", {"width": 390, "height": 844})
+    violations = run(browser, "desktop-", {"width": 1440, "height": 900})
+    violations += run(browser, "mobile-", {"width": 390, "height": 844})
     browser.close()
+
+if violations:
+    sys.exit("Content-Security-Policy violations found (see console errors above).")

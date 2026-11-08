@@ -35,6 +35,38 @@
       {% endfor %}
       <button type="submit" class="btn btn-primary">Change password</button>
     </form>
+    <p class="small muted section">Changing your password also logs out every signed-in app.</p>
   </section>
 </div>
+
+<section class="sheet section">
+  <h2>Signed-in apps</h2>
+  <p class="small muted">Apps that use the Chapify API on your behalf, such as the mobile app. Each sign-in expires automatically; log out any you do not recognise.</p>
+  {% if api_tokens %}
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>App</th><th>Key starts with</th><th>Signed in</th><th>Last used</th><th>Expires</th><th></th></tr></thead>
+      <tbody>
+        {% for token in api_tokens %}
+        <tr>
+          <td>{{ token.name }}</td>
+          <td class="ref">{{ token.key_prefix }}…</td>
+          <td>{{ token.created_at|date:"j M Y, H:i" }}</td>
+          <td>{{ token.last_used_at|date:"j M Y, H:i"|default:"Not used yet" }}</td>
+          <td>{{ token.expires_at|date:"j M Y, H:i" }}</td>
+          <td>
+            <form method="post" action="{% url 'account_revoke_token' token.id %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm">Log out</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p>No apps are signed in to your account.</p>
+  {% endif %}
+</section>
 {% endblock %}

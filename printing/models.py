@@ -285,6 +285,8 @@ class AuditLog(models.Model):
     EVENT_PRINT_JOB_STATUS_CHANGED = "PRINT_JOB_STATUS_CHANGED"
     EVENT_USER_MANAGED = "USER_MANAGED"
     EVENT_ADMIN_ACTION = "ADMIN_ACTION"
+    EVENT_API_TOKEN_CREATED = "API_TOKEN_CREATED"
+    EVENT_API_TOKEN_REVOKED = "API_TOKEN_REVOKED"
 
     EVENT_CHOICES = [
         (EVENT_LOGIN_SUCCESS, "Login success"),
@@ -306,6 +308,8 @@ class AuditLog(models.Model):
         (EVENT_PRINT_JOB_STATUS_CHANGED, "Print job status changed"),
         (EVENT_USER_MANAGED, "User managed"),
         (EVENT_ADMIN_ACTION, "Admin action"),
+        (EVENT_API_TOKEN_CREATED, "API token created"),
+        (EVENT_API_TOKEN_REVOKED, "API token revoked"),
     ]
 
     user = models.ForeignKey(
@@ -326,3 +330,35 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.event_type} at {self.event_timestamp}"
+
+class ApiToken(models.Model):
+    """A credential for an API client such as the mobile app.
+
+    Unlike Django REST Framework's built-in token, an ApiToken
+    - expires (settings.API_TOKEN_TTL_HOURS),
+    - can be revoked by the user (log out a device) or by the system
+      (password change, blocked account),
+    - is never stored in readable form: only its SHA-256 hash is kept, so a
+      copy of the database does not reveal usable tokens.
+    """
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="api_tokens")
+    # Client-chosen label, e.g. "Chapify mobile" or "curl".
+    name = models.CharField(max_length=100)
+    # First characters of the token, shown so the user can recognise it.
+    key_prefix = models.CharField(max_length=12)
+    key_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @property
+    def is_active(self):
+        return self.revoked_at is None and self.expires_at > timezone.now()
+
+    def __str__(self):
+        return f"{self.name} ({self.key_prefix}...) for {self.user}"
