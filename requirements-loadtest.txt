@@ -1,0 +1,3 @@
+# Only for load testing (docs/LOAD_TESTING.md); not needed to run Chapify.
+locust==2.47.0
+waitress==3.0.2

@@ -167,8 +167,9 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "60/minute",
-        "user": "300/minute",
+        # Raised only for load tests (see docs/LOAD_TESTING.md).
+        "anon": env_str("CHAPIFY_THROTTLE_ANON", "60/minute"),
+        "user": env_str("CHAPIFY_THROTTLE_USER", "300/minute"),
         "print_station": "240/minute",
     },
 }
