@@ -278,6 +278,9 @@ python manage.py test
 
 The gateway has its own tests: `cd gateway_service` then `python manage.py test`.
 
+Load testing (many simultaneous users across all three applications, with Locust): see
+[docs/LOAD_TESTING.md](docs/LOAD_TESTING.md).
+
 GitHub Actions runs on every push to `main` and every pull request, on Windows and Linux with
 Python 3.12 and 3.13 (`.github/workflows/tests.yml`): `check`, `makemigrations --check`, the
 Chapify and print station tests, OpenAPI schema validation, the gateway's tests, `pip-audit` and

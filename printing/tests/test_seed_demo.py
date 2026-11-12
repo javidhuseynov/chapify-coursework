@@ -32,3 +32,16 @@ class SeedDemoTests(ChapifyTestCase):
         call_command("seed_demo", stdout=StringIO())
         with self.assertRaises(CommandError):
             call_command("seed_demo", stdout=StringIO())
+
+
+class LoadTestUsersCommandTests(ChapifyTestCase):
+    def test_creates_and_deletes_accounts(self):
+        from django.contrib.auth.models import User
+        from django.core.management import call_command
+
+        call_command("create_loadtest_users", "--count", "3", stdout=StringIO())
+        call_command("create_loadtest_users", "--count", "3", stdout=StringIO())  # idempotent
+        self.assertEqual(User.objects.filter(username__startswith="loadtest_").count(), 3)
+        self.assertTrue(User.objects.get(username="loadtest_002").check_password("Load-test-pass-2026"))
+        call_command("create_loadtest_users", "--delete", stdout=StringIO())
+        self.assertFalse(User.objects.filter(username__startswith="loadtest_").exists())

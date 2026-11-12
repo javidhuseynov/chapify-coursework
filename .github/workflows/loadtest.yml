@@ -1,0 +1,61 @@
+name: Load test
+
+# A short load test of all three applications (manual, or when the load test
+# itself changes). Results are printed in the log; see docs/LOAD_TESTING.md.
+on:
+  workflow_dispatch:
+    inputs:
+      users:
+        description: "Simulated users"
+        default: "30"
+      duration:
+        description: "Duration (e.g. 60s, 3m)"
+        default: "60s"
+  pull_request:
+    paths:
+      - "loadtest/**"
+      - "serve.py"
+      - "gateway_service/serve.py"
+      - ".github/workflows/loadtest.yml"
+
+jobs:
+  loadtest:
+    runs-on: ubuntu-latest
+    env:
+      CHAPIFY_DEBUG: "True"
+      CHAPIFY_THROTTLE_ANON: "100000/minute"
+      CHAPIFY_THROTTLE_USER: "100000/minute"
+      USERS: ${{ github.event.inputs.users || '30' }}
+      DURATION: ${{ github.event.inputs.duration || '60s' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements.txt -r requirements-loadtest.txt
+      - name: Prepare databases and accounts
+        run: |
+          python manage.py migrate -v 0
+          python manage.py create_loadtest_users --count 50
+          (cd gateway_service && python manage.py migrate -v 0)
+      - name: Start Chapify and Chapify Pay (waitress)
+        run: |
+          (cd gateway_service && python serve.py > ../gateway.log 2>&1 &)
+          python serve.py > chapify.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/login/ > /dev/null && curl -sf http://127.0.0.1:8001/ > /dev/null && break; sleep 1; done
+      - name: Run Locust
+        run: |
+          locust -f loadtest/locustfile.py --host http://127.0.0.1:8000 --headless \
+            -u "$USERS" -r 5 -t "$DURATION" --csv loadtest-results --only-summary
+      - name: Results
+        if: always()
+        run: |
+          python loadtest/summary.py loadtest-results_stats.csv
+          python manage.py shell -c "from printing.models import PrintRequest as R, PaymentTransaction as P; print('Requests:', R.objects.count(), '| confirmed payments:', P.objects.filter(payment_status='CONFIRMED').count(), '| rejected:', P.objects.filter(payment_status='REJECTED').count())"
+      - name: Server logs (errors)
+        if: always()
+        run: |
+          grep -iE "error|traceback|locked" chapify.log | head -40 || true
+          grep -iE "error|traceback|locked" gateway.log | head -20 || true
