@@ -1,7 +1,7 @@
 """Run Chapify with a production-grade server (waitress) instead of runserver.
 
     python serve.py                 Chapify on 127.0.0.1:8000
-    python serve.py --threads 16
+    python serve.py --threads 16 --connection-limit 2000
 
 Used for load tests: Django's runserver is for development and would make
 the measurements meaningless. Static files are still served by Django only
@@ -20,7 +20,20 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--threads", type=int, default=8)
+    # waitress accepts only 100 open connections by default. Every simulated
+    # user keeps one open, so above ~100 users the rest would wait in a queue
+    # and the test would measure that limit instead of Chapify.
+    parser.add_argument("--connection-limit", type=int, default=1000)
     args = parser.parse_args()
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "chapify.settings")
-    print(f"Chapify (waitress, {args.threads} threads) on http://{args.host}:{args.port}/")
-    serve(application, host=args.host, port=args.port, threads=args.threads)
+    print(
+        f"Chapify (waitress, {args.threads} threads, up to {args.connection_limit} connections) "
+        f"on http://{args.host}:{args.port}/"
+    )
+    serve(
+        application,
+        host=args.host,
+        port=args.port,
+        threads=args.threads,
+        connection_limit=args.connection_limit,
+    )

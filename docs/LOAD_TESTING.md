@@ -97,6 +97,14 @@ set-up.
 - At high load, failures with *database is locked* come from **SQLite**, which allows one write at
   a time. This is the known limit of the development database; the remedy is PostgreSQL (a
   settings change) and several server processes with a shared cache.
+- **Connection limit of the server.** Each simulated user keeps one connection open. waitress
+  accepts only 100 open connections by default, so in the first 100/200-user runs (12 November
+  2026) only 98 users ever logged in. The others waited in a queue for the whole run, and the
+  gateway's webhook to Chapify had to queue too. As a result, payment start-ups timed out after
+  10 s (503 "payment service cannot be reached") and card pages took 15 s or more. Both
+  `serve.py` files now allow 1,000 connections (`--connection-limit`). If the limit is still
+  reached, the server window shows a waitress warning that it is "no longer accepting new
+  connections".
 - Each payment involves three server-to-server calls (create session, webhook, status), so it is
   the slowest flow after login.
 
